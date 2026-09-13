@@ -1,0 +1,5 @@
+# 编译与生成产物
+loc/
+out/
+*.UTF-8
+__pycache__/
