@@ -67,9 +67,14 @@ import sys
 
 # ---- 参数化: python3 gen_zhnum.py TIER OUTDIR ----
 if len(sys.argv) < 3:
-    sys.exit('用法: python3 gen_zhnum.py TIER OUTDIR   (TIER = 完美范围上限 10**n; 0 = 不枚举)')
+    sys.exit('用法: python3 gen_zhnum.py TIER OUTDIR [pure|mixed]\n'
+             '  TIER  完美范围上限 10**n (0 = 不枚举)\n'
+             '  OUTDIR 输出目录\n'
+             '  pure  只注册全小写/全大写两套写法 (体积约一半)\n'
+             '  mixed 再加 小写数字+大写单位 / 大写数字+小写单位 两套 (默认)')
 TIER = int(sys.argv[1])
 OUTDIR = sys.argv[2]
+STYLES = sys.argv[3] if len(sys.argv) > 3 else 'mixed'
 TRUNC_LIMIT = 99999   # 截断枚举上限: 万级省零截断形 (四万五千六 类) 枚举到 99990
 
 def in_tier(v):
@@ -126,6 +131,57 @@ TRD_ = str.maketrans(D, '壹贰叁肆伍陆柒捌玖')    # A: 只译数字
 TRDT_ = str.maketrans(D, '壹貳參肆伍陸柒捌玖')  # A 繁体
 TRU_ = str.maketrans('十百千万', '拾佰仟萬')      # B: 只译单位
 
+# 别名闭包: 同一数值的全部中文写法。四种风格 —— 全小写 / 全大写 / 小写数字+
+# 大写单位 / 大写数字+小写单位, 每种各带简繁一套。
+# 分类: 十百千 前面有数字时属单位类 (一千 的 千), 否则属数字类 (十万 的 十);
+#   万亿 恒属单位类。
+# 两轴独立: 数字类 小写/大写简/大写繁 (贰/貳 叁/參 陆/陸); 单位类 简繁 是
+#   万/萬 亿/億 —— 萬 是繁体字而非财务字, 故简体的全大写是 壹佰万 (人民币
+#   壹佰万元整), 繁体的全大写才是 壹佰萬。数字类 3 形 × 单位类 4 形展开即得
+#   全部写法, 注册点只写一次闭包 ⇒ 不存在"某别名注册了、另一种漏了"的余地
+#   (漏一种写法即整串退化多原子, 首原子的写法序会压过后缀数值)。
+_DIGS = '一二三四五六七八九'
+_SBKS = '十百千'
+_WYS = '万亿'
+_DMAP = [str.maketrans('', ''),
+         str.maketrans(_DIGS + _SBKS, '壹贰叁肆伍陆柒捌玖' + '拾佰仟'),
+         str.maketrans(_DIGS + _SBKS, '壹貳參肆伍陸柒捌玖' + '拾佰仟')]
+_UMAP = [str.maketrans('', ''),                          # 小写简
+         str.maketrans(_SBKS, '拾佰仟'),                  # 大写简 (万/亿 仍是 万/亿)
+         str.maketrans(_WYS, '萬億'),                     # 小写繁
+         str.maketrans(_SBKS + _WYS, '拾佰仟' + '萬億')]   # 大写繁
+# 风格组合 (数字类风格下标, 单位类风格下标)。
+# 纯形 = 数字类与单位类同级配对: 全小写 (小写+小写) 与 全大写 (大写+大写),
+#   各带简繁 —— 四种风格里不含混搭的两套。
+# 含混搭 = 再加上「小写数字+大写单位」与「大写数字+小写单位」两套。
+# 组内序 = 注册序 (同值写法按此相邻): 纯简 < 纯财 < A 数字财+单位简 < B 数字简+
+# 单位财 < 繁财; 其余组合排在其后。
+_STYLE_PURE = ((0, 0), (1, 1), (0, 2), (2, 3))
+_STYLE_MIXED = ((0, 0), (1, 1), (1, 0), (1, 2), (1, 3),
+                (0, 1), (0, 2), (0, 3), (2, 1), (2, 3), (2, 0), (2, 2))
+_STYLE_ORDER = _STYLE_MIXED if STYLES == 'mixed' else _STYLE_PURE
+
+def _cls(s):
+    """逐字符分类: 'd' 数字类 / 'u' 单位类"""
+    g, prev_d = [], False
+    for c in s:
+        if c in _SBKS + _WYS:
+            is_u = prev_d or c in _WYS
+            g.append('u' if is_u else 'd')
+            prev_d = not is_u
+        else:
+            g.append('d')
+            prev_d = c in _DIGS
+    return g
+
+def alias_closure(s):
+    """读数 s 的全部合法写法 (数字类 3 形 × 单位类 4 形, 类内统一)"""
+    g = _cls(s)
+    return list(dict.fromkeys(
+        ''.join(c.translate(_DMAP[d] if grp == 'd' else _UMAP[u_])
+                for c, grp in zip(s, g))
+        for d, u_ in _STYLE_ORDER))
+
 def u(c):
     return f'<U{ord(c):04X}>'
 
@@ -170,8 +226,8 @@ all_rows = sorted(hanzi_row(v, s) for v, s in strokes.items())
 # 值域 ⇒ 汉字 < 兼容汉字 < 其他脚本; 脚本间顺序 = 基表文件序 (iso 组内
 # 意图保留: あ/ア 相邻、全角 Ａ 跟 a). **兼容汉字** (F900-FAFF /
 # 2F800-2FA1F) 紧跟汉字块、先于其他脚本 ⇒ 中文区 = 汉字块 + 兼容汉字
-# 尾巴. ASCII 字母数字排除 (zhnum 里是槽/拉丁行; zhbase 里保持基表位置
-# = 拉丁在汉字之下). 与汉字块零重叠 (基表不定义 4E00-9FFF), 无塌缩
+# 尾巴 (基表未收录的码点由下方区段枚举补齐). ASCII 字母数字排除 (zhnum 里
+# 是槽/拉丁行; zhbase 里保持基表位置 = 拉丁在汉字之下). 与汉字块零重叠 (基表不定义 4E00-9FFF), 无塌缩
 # 风险; '!'(U0021) 等标点一级 IGNORE 不入集 ⇒ 汉字行四级标记 <U0021>
 # 不受影响. 未定义码点 (ext-A/B 汉字等) glibc 回落 = 一~三级 IGNORE +
 # 四级固定值, 互相 tie 按邻居排 (实测 㐀 与 𠀀 键相同).
@@ -179,6 +235,7 @@ all_rows = sorted(hanzi_row(v, s) for v, s in strokes.items())
 # IGNORE 行漏判 (实测 8265 个透明元素被误提升).
 _w_row = re.compile(r'^<(U[0-9A-F]{4,8})> ([^;]*);')
 compat_rows, script_rows = [], []
+_compat_cp = set()      # 基表已收录的兼容汉字码点
 _seen_tok = set()
 _in_tbl = False
 for line in open(ISO_FILE, encoding='utf-8'):
@@ -198,8 +255,24 @@ for line in open(ISO_FILE, encoding='utf-8'):
         continue
     _seen_tok.add(tok)
     row = f'{tok} {tok};IGNORE;IGNORE;IGNORE'
-    (compat_rows if 0xF900 <= cp <= 0xFAFF or 0x2F800 <= cp <= 0x2FA1F
-     else script_rows).append(row)
+    if 0xF900 <= cp <= 0xFAFF or 0x2F800 <= cp <= 0x2FA1F:
+        compat_rows.append(row)
+        _compat_cp.add(cp)
+    else:
+        script_rows.append(row)
+
+# 兼容汉字补齐: 基表未收录的码点 (Unicode 后期新增的兼容汉字, 如 U+FA6E/
+# U+FA6F/U+FADA..U+FAFF, 以及 2F800 段的两点) 在基表里既无单字行也无区间
+# 行 ⇒ glibc 回落到"一~三级 IGNORE", 会排到整个排序的最前面 (连拉丁都在其
+# 后), 违反"兼容汉字紧跟汉字块"的契约. 这里按码点补齐, 使其落回兼容汉字尾
+# 巴. 按区段枚举而非查 Unihan 表: 兼容汉字区是 Unicode 固定区段, 后续版本只
+# 会在区内新增码点 ⇒ 对 Unihan/Unicode 更新天然免疫, 无需额外的数据文件.
+# 注意: 其中 40 个码点 (U+FA6E/FA6F/U+FADA..U+FAFF) 不在 glibc 的 UTF-8
+# charmap 里, 需配合 gen-charmap.py 生成的补齐版 charmap 才生效 (否则本行被
+# localedef 静默丢弃, 字符回落排到最前).
+for _cp in list(range(0xF900, 0xFB00)) + list(range(0x2F800, 0x2FA1E)):
+    if _cp not in _compat_cp:
+        compat_rows.append(f'<U{_cp:04X}> <U{_cp:04X}>;IGNORE;IGNORE;IGNORE')
 
 # ---- 数字区 (仅 zhnum) ----
 elems = []              # (元素符号, 定义串)
@@ -302,6 +375,20 @@ for _us, _uf, _uv in (('十', '拾', 10), ('百', '佰', 100), ('千', '仟', 10
 for r, f, v in COEFS:
     if len(r) >= 2 and r not in ('一百', '一千'):
         add(v, [elem(r), elem(f)])
+# 系数拼写矩阵补全: COEFS 只给"规则"系数 (二..九/十/X十/百/X百/千/X千/
+# 整十带百) 建槽, 其余复合系数 (一百零一 / 一千二百三十四 类) 无独立槽 —
+# 退化多原子后首原子只到系数首段, 而首原子带字形序 (简 < A < 纯财 < B) 且
+# 与数值同层比较 ⇒ 前缀写法压过后缀数值 (壹仟零壹拾壹 被当成 壹仟 参与比较,
+# 排到 一千零一十 之前). 每个系数单原子后值序直接正确.
+# 四形口径同正文: 纯简 / 纯财 / A 数字财+单位简 / B 数字简+单位财; 财务字
+# 另含 贰/貳 叁/參 陆/陸 三对异形, 一并注册 (同值相邻不等值).
+# 单字形 (一..九/十/百/千) 已在上文注册, 此处只收多字形.
+for _bv in range(1, 10000):
+    _bs = read(_bv)
+    _bm = [f for f in alias_closure(_bs) if len(f) >= 2]
+    if _bm:
+        add(_bv, [elem(f) for f in _bm])
+
 # 整十元素补 两 形: 两百一十..两百九十 (9 元素). 无它时 两百一十 贪心落
 # [两百一](口语 210)+[十], 尾缀是单位权 (十), 大于一切数字权 (九) ⇒
 # 两百一十(210) 排到 二百一十九(219) 之后. 注册整十 两 形后 [两百一十]
@@ -341,11 +428,7 @@ for unit, fin, val in UNIT_CHAIN:
     #   (壹百万/一佰万 拆链或单位混).
     # 裸 '十' 系数特例: _fins[0]=拾 ⇒ A 拾万 / 纯财 拾萬 / B 十萬.
     for _r, (_v, _fins) in _by_coef.items():
-        _forms = [_r + unit, _fins[0] + unit, _fins[0] + fin]
-        if len(_fins) > 1:
-            _forms.append(_fins[1] + fin)
-        _forms.append(_r + fin)
-        add(_v * val, [elem(s) for s in dict.fromkeys(_forms)])
+        add(_v * val, [elem(s) for s in alias_closure(_r + unit)])
     # 省"一"简写 (百万/千万/千亿) 不注册 — [百][亿] 首原子 100 夹在系数层
 
 def _liang_closure(s, guards=True):
@@ -384,8 +467,7 @@ if TIER:
         _rmax = min(9999, TIER // _ev)
         for _r in range(1, _rmax + 1):
             _s = read(_r)
-            _fs = dict.fromkeys([_s + _eu, _s.translate(TR) + _efu,
-                                 _s.translate(TR_T) + _efu])
+            _fs = alias_closure(_s + _eu)
             add(_r * _ev, [elem(f) for f in _fs])
             # 闭包在 化合物 read(r)+u 上 (非 read(r)): r 末位 二 拼上
             # 单位才可换 (一千零两万); 序同省零/带零化合物的 两 闭包
@@ -421,7 +503,8 @@ for _a in list(D) + [LIANG]:
     for _u, _uv in (('百', 100), ('千', 1000), ('万', 10**4)):
         for _b in D:
             _bv = D.index(_b) + 1
-            add(_av * _uv + _bv * (_uv // 10), [elem(_a + _u + _b)])
+            add(_av * _uv + _bv * (_uv // 10),
+                [elem(x) for x in alias_closure(_a + _u + _b)])
 
 # ---- 省零化合物 X万B十/X万B百/X千B十/X千B百 = X·U + B·T ----
 # 一万一=11000/一万一十=10010/一万一百=10100: 省零读法须单原子 —
@@ -440,9 +523,7 @@ for _x in D:
                 _c1 = _x + _u2 + _b2 + _t2
                 _c1s = [_c1] + sorted(_liang_closure(_c1) - {_c1},
                                       key=lambda f: (f.count('两'), f))
-                _f2s = [_c1.translate(TRD_), _c1.translate(TRF_),   # A / 纯财务
-                        _c1.translate(TRFT_), _c1.translate(TRU_),  # 纯财繁 / B
-                        _c1.translate(TRDT_)]                        # A 繁
+                _f2s = alias_closure(_c1)
                 add(_v2, [elem(s) for s in
                           _c1s + [f for f in dict.fromkeys(_f2s) if f not in _c1s]])
 
@@ -466,10 +547,7 @@ for _x in D:
                 _c2 = _x + _u3 + '零' + _b3 + _t3
                 _forms = [_c2] + sorted(_liang_closure(_c2) - {_c2},
                                         key=lambda f: (f.count('两'), f))
-                if _u3 == '万':                # 万级补财务四形 (千级同截断不补)
-                    _forms += [_c2.translate(TRD_), _c2.translate(TRF_),
-                               _c2.translate(TRFT_), _c2.translate(TRU_),
-                               _c2.translate(TRDT_)]
+                _forms += alias_closure(_c2)
                 add(_v3, [elem(f) for f in dict.fromkeys(_forms)])
 
 # ---- 截断枚举: 口语截断形单原子化 (v ≡ 0 mod 10, v ≤ 99990) ----
@@ -510,7 +588,8 @@ for _v in range(10, TRUNC_LIMIT + 1, 10):
             if (_f and any(_c in _f for _c in '十百千万亿')
                     and '十两' not in _f and '零两' not in _f):
                 _forms.append(_f)
-    add(_v, [elem(_f) for _f in dict.fromkeys(_forms)])
+    add(_v, [elem(x) for x in dict.fromkeys(
+        f for _f in _forms for f in alias_closure(_f))])
 
 # 序数括号组: (上/前) < (中) < (下/后), 槽值 0.1/0.2/0.3 落在 零 与 一
 # 之间; 全角/半角、圆/方括号同槽

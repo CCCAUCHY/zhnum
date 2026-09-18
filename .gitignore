@@ -3,3 +3,4 @@ loc/
 out/
 *.UTF-8
 __pycache__/
+charmaps/

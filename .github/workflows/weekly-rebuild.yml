@@ -1,4 +1,4 @@
-name: 周构建（Unihan 更新检查 + 三档重建）
+name: 周构建（Unihan 更新检查 + 六份重建）
 
 on:
   schedule:
@@ -11,6 +11,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      CHARMAP: ${{ github.workspace }}/charmaps/UTF-8
     steps:
       - uses: actions/checkout@v4
 
@@ -40,32 +42,40 @@ jobs:
           echo "UPDATED=$rc" >> "$GITHUB_ENV"
           if [ "$rc" -eq 0 ]; then echo "Unihan: 有更新, 本次将提交重建产物"; else echo "Unihan: 无变化"; fi
 
-      - name: 重建三档 locale 源
+      - name: 生成补齐版 charmap
         run: |
-          mkdir -p out/亿 out/万亿 out/亿亿
-          python3 gen_zhnum.py 100000000         out/亿
-          python3 gen_zhnum.py 1000000000000     out/万亿
-          python3 gen_zhnum.py 10000000000000000 out/亿亿
+          # glibc 的 UTF-8 charmap 漏收 U+FA6E/FA6F/U+FADA..FAFF 等兼容汉字,
+          # 缺了它们 localedef 会静默丢弃对应 locale 行 ⇒ 这些字回落排到最前
+          python3 gen-charmap.py charmaps
+
+      - name: 重建六份 locale 源（三档 × 两版本）
+        run: |
+          for pair in "100000000 亿" "1000000000000 万亿" "10000000000000000 亿亿"; do
+            set -- $pair
+            for v in pure mixed; do
+              mkdir -p "out/$2-$v"
+              python3 gen_zhnum.py "$1" "out/$2-$v" "$v"
+            done
+          done
 
       - name: 编译 + verify（全绿才继续）
         run: |
           set -e
           for t in 亿 万亿 亿亿; do
-            mkdir -p out/$t/loc
-            (cd out/$t \
-             && localedef -i zhbase -f UTF-8 ./loc/zhbase.UTF-8 \
-             && localedef -i zhnum  -f UTF-8 ./loc/zhnum.UTF-8)
-            LC_ALL=zhnum.UTF-8 LOCPATH="$PWD/out/$t/loc" \
-              python3 verify.py | tail -1 | grep -q '全部通过' \
-              || { echo "::error::$t 档 verify 未全绿"; exit 1; }
-            echo "$t: verify 全部通过"
+            for v in pure mixed; do
+              mkdir -p "out/$t-$v/loc"
+              (cd "out/$t-$v" \
+               && localedef -f "$CHARMAP" -i "$PWD/zhbase" ./loc/zhbase.UTF-8 \
+               && localedef -f "$CHARMAP" -i "$PWD/zhnum"  ./loc/zhnum.UTF-8)
+              LC_ALL=zhnum.UTF-8 LOCPATH="$PWD/out/$t-$v/loc" \
+                python3 verify.py | tail -1 | grep -q '全部通过' \
+                || { echo "::error::$t/$v verify 未全绿"; exit 1; }
+              echo "$t/$v: verify 全部通过"
+            done
           done
 
-      - name: 同步产物到 tiers/
-        run: |
-          for t in 亿 万亿 亿亿; do
-            cp out/$t/zhnum out/$t/zhbase tiers/$t/
-          done
+      - name: 同步产物到 tiers/（超 100MB 的压 zip）
+        run: ./pack_tiers.sh
 
       - name: 数据有更新时提交
         if: env.UPDATED == '0'
@@ -80,15 +90,9 @@ jobs:
             git push origin HEAD:main
           fi
 
-      - name: 上传三档产物 (artifacts)
+      - name: 上传六份产物 (artifacts)
         uses: actions/upload-artifact@v4
         with:
           name: zhnum-tiers-${{ github.run_number }}
-          path: |
-            out/亿/zhnum
-            out/亿/zhbase
-            out/万亿/zhnum
-            out/万亿/zhbase
-            out/亿亿/zhnum
-            out/亿亿/zhbase
+          path: tiers/        # 入库形态 (超 100MB 的已压 zip), 约 225MB
           retention-days: 90
