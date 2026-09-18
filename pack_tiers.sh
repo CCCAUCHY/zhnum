@@ -13,8 +13,13 @@ for t in 亿 万亿 亿亿; do
     if [ "$(stat -c%s "out/$t-$v/zhnum")" -gt "$LIMIT" ]; then
       (cd "out/$t-$v" && python3 -c "
 import sys, zipfile
-with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
-    z.write('zhnum', 'zhnum')
+# 固定时间戳: zip 默认写入文件 mtime, 会让内容未变的产物每次构建都变字节,
+# 周构建因此产生无意义的'有更新'提交。内容 + 固定元数据 = 可复现字节。
+zi = zipfile.ZipInfo('zhnum', date_time=(1980, 1, 1, 0, 0, 0))
+zi.compress_type = zipfile.ZIP_DEFLATED
+zi.external_attr = 0o644 << 16
+with zipfile.ZipFile(sys.argv[1], 'w', compresslevel=9) as z:
+    z.writestr(zi, open('zhnum', 'rb').read())
 " "$OLDPWD/$d/zhnum.zip")
       echo "  $t/$v: zhnum.zip $(du -h "$d/zhnum.zip" | cut -f1)"
     else

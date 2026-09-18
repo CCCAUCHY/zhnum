@@ -86,7 +86,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "产物无实质变化, 跳过提交"
           else
-            git commit -m "周构建: Unihan 数据更新 → 三档重建 ($(date -u +%F))"
+            git commit -m "周构建: Unihan 数据更新 → 六份重建 ($(date -u +%F))"
             git push origin HEAD:main
           fi
 
