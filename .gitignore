@@ -4,3 +4,8 @@ out/
 *.UTF-8
 __pycache__/
 charmaps/
+
+# 密钥目录（勿入库）
+GitHub_token/
+*_token
+token
