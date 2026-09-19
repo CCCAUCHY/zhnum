@@ -9,3 +9,6 @@ charmaps/
 GitHub_token/
 *_token
 token
+
+# 第三方检查器的原始副本（已整合进 tools/ 与 .github/workflows/）
+security_check/

@@ -2,7 +2,7 @@
 # 汇总产物到 tiers/:
 #   tiers/zhbase                  —— 六份共用一份 (三档两版本的 zhbase 完全相同,
 #                                    脚本里先断言, 不同则报错而不是静默覆盖)
-#   tiers/<档>/<版本>/zhnum       —— 或 zhnum.zip (超 GitHub 100MB 单文件上限时)
+#   tiers/<档>/<版本>/zhnum       —— 或 zhnum.gz (超 GitHub 100MB 单文件上限时)
 # zhnum 用 copy "zhbase", 编译时两者须同目录可见 —— 部署时把 zhbase 与所选
 # zhnum 放到一起即可 (见 README「产物」段)。
 set -e
@@ -30,19 +30,19 @@ mkdir -p tiers && cp "$REF" tiers/zhbase
 for t in 亿 万亿 亿亿; do
   for v in pure mixed; do
     d="tiers/$t/$v"; mkdir -p "$d"
-    rm -f "$d/zhnum" "$d/zhnum.zip"
+    rm -f "$d/zhnum" "$d/zhnum.zip" "$d/zhnum.gz"
     if [ "$(stat -c%s "out/$t-$v/zhnum")" -gt "$LIMIT" ]; then
       (cd "out/$t-$v" && python3 -c "
-import sys, zipfile
-# 固定时间戳: zip 默认写入文件 mtime, 会让内容未变的产物每次构建都变字节,
-# 周构建因此产生无意义的'有更新'提交。内容 + 固定元数据 = 可复现字节。
-zi = zipfile.ZipInfo('zhnum', date_time=(1980, 1, 1, 0, 0, 0))
-zi.compress_type = zipfile.ZIP_DEFLATED
-zi.external_attr = 0o644 << 16
-with zipfile.ZipFile(sys.argv[1], 'w', compresslevel=9) as z:
-    z.writestr(zi, open('zhnum', 'rb').read())
-" "$OLDPWD/$d/zhnum.zip")
-      echo "  $t/$v: zhnum.zip $(du -h "$d/zhnum.zip" | cut -f1)"
+import sys, gzip
+# mtime=0: 不把源文件 mtime 写进 gz 头, 否则内容未变的产物每次构建都变字节,
+# 周构建因此产生无意义的提交。
+# 注意: 压缩流本身仍随 zlib/Python 版本变 (同机实测 gzip.compress 与 gzip CLI
+# 同数据压出的字节就不同), 所以换构建环境后第一次运行仍会产生一次提交。
+# 想彻底免掉这点, 只能不压缩、把超大文件切片 —— 代价是仓库大一个量级。
+with open(sys.argv[1], 'wb') as out:
+    out.write(gzip.compress(open('zhnum', 'rb').read(), compresslevel=9, mtime=0))
+" "$OLDPWD/$d/zhnum.gz")
+      echo "  $t/$v: zhnum.gz $(du -h "$d/zhnum.gz" | cut -f1)"
     else
       cp "out/$t-$v/zhnum" "$d/zhnum"
       echo "  $t/$v: zhnum $(du -h "$d/zhnum" | cut -f1)"

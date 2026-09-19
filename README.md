@@ -46,7 +46,7 @@
 | `tiers/亿亿` | 10¹⁶ | `mixed` | 541,973 | 45 ms |
 
 `zhbase` 六份内容相同，仓库里只放一份（`tiers/zhbase`）。万亿/亿亿 的
-`mixed` 超出 GitHub 单文件上限，以 `zhnum.zip` 入库（`unzip` 即得）。
+`mixed` 超出 GitHub 单文件上限，以 `zhnum.gz` 入库（`gzip -d` 即得）。
 
 **性能上建议搭配 Nautilus（GNOME Files）使用**：数值槽在权重2 带影子（见
 How it works），中文数值区的键从第 2 字节起才有值——在这条路径上整组排在
@@ -96,7 +96,7 @@ LC_ALL=zhnum.UTF-8 LOCPATH=$PWD/out/亿/loc python3 verify.py   # 末行应显�
 tiers/
   zhbase                  默认排序源（汉字单块 + 兼容汉字 + 脚本行）
   <档>/<版本>/zhnum        数字槽排序   <档> ∈ {亿, 万亿, 亿亿}  <版本> ∈ {pure, mixed}
-  <档>/<版本>/zhnum.zip    同上，仅因超出 GitHub 单文件上限而压缩，`unzip` 即得
+  <档>/<版本>/zhnum.gz     同上，仅因超出 GitHub 单文件上限而压缩，`gzip -d` 即得
 ```
 
 `zhbase` 六份内容相同，仓库里只放一份。`zhnum` 用 `copy "zhbase"`，

@@ -70,6 +70,13 @@ jobs:
             done
           done
 
+      - name: 产物静态检查（生成阶段）
+        run: |
+          # 纯只读: 查编码安全 (非法 UTF-8 / C0 控制字符 / 双向覆盖字符)、
+          # copy 目标白名单、include 这类会把仓库外文件拼进来的指令。
+          # 顺序放在编译之前 —— 有问题的源文件不必浪费一轮 localedef。
+          python3 tools/lint_locale.py out/
+
       - name: 编译 + verify（全绿才继续）
         run: |
           set -e
@@ -86,8 +93,13 @@ jobs:
             done
           done
 
-      - name: 同步产物到 tiers/（超 100MB 的压 zip）
+      - name: 同步产物到 tiers/（超 100MB 的压 gz）
         run: ./pack_tiers.sh
+
+      - name: 产物静态检查（入库阶段）
+        run: python3 tools/lint_locale.py tiers/
+        # 检查器只扫名为 zhbase/zhnum 的文件, 压缩包不在其范围内 —— 压缩形态的
+        # 检查由上面「生成阶段」在 out/ 上完成 (同一份内容, 未压缩)
 
       - name: 上传六份产物 (artifacts)
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4

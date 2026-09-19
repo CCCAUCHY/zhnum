@@ -1,0 +1,38 @@
+name: 产物静态检查
+
+# 只要 tiers/ 或检查器本身变了就跑一遍 (外加 PR), 与周构建独立 —— 周构建失败
+# 或尚未跑时, 这条路径仍能拦住被篡改的产物。
+on:
+  push:
+    paths:
+      - 'tiers/**'
+      - 'tools/lint_locale.py'
+      - '.github/workflows/lint-locale.yml'
+  pull_request:
+    paths:
+      - 'tiers/**'
+      - 'tools/lint_locale.py'
+  workflow_dispatch:
+
+# 纯只读: 检查器只读产物, 唯一的写是把结论追加到 job summary。
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # 与周构建一致, actions 钉到 commit SHA (tag 可被重新指向)。
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          fetch-depth: 1          # tiers/ 两百多 MB, 不拉历史
+          persist-credentials: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: '3.12'
+
+      - name: 产物静态检查
+        run: python3 tools/lint_locale.py tiers/
