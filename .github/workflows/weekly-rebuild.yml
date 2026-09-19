@@ -5,16 +5,27 @@ on:
     - cron: '23 4 * * 1'   # 每周一 04:23 UTC (避开整点)
   workflow_dispatch:        # 手动触发
 
+# 权限按 job 给, 不在此处给全局 write:
+#   build  —— 只读。它要下载并解压外部数据 (Unihan.zip), 是与不可信输入打交道的
+#             那一步, 不该同时持有写权限、也不该让 GITHUB_TOKEN 落在 .git/config。
+#   commit —— 只在数据确有更新时运行, 不接触外部输入, 才给 contents: write。
 permissions:
-  contents: write           # 数据更新时提交三档产物
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     env:
       CHARMAP: ${{ github.workspace }}/charmaps/UTF-8
+    outputs:
+      updated: ${{ steps.unihan.outputs.updated }}
     steps:
-      - uses: actions/checkout@v4
+      # actions 一律钉到 commit SHA: tag 可被重新指向, SHA 不会。
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          persist-credentials: false   # 不把 token 写进 .git/config
 
       - name: 确保 localedef 与 locale 数据源可用
         run: |
@@ -24,11 +35,12 @@ jobs:
             sudo apt-get install -y -qq locales
           fi
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
         with:
           python-version: '3.12'
 
       - name: 拉取最新 Unihan 数据
+        id: unihan
         run: |
           # 退出码: 0 = 有更新, 2 = 无变化, 其他 = 失败
           set +e
@@ -39,7 +51,7 @@ jobs:
             echo "::error::update-unihan.py 异常退出 ($rc)"
             exit 1
           fi
-          echo "UPDATED=$rc" >> "$GITHUB_ENV"
+          echo "updated=$rc" >> "$GITHUB_OUTPUT"
           if [ "$rc" -eq 0 ]; then echo "Unihan: 有更新, 本次将提交重建产物"; else echo "Unihan: 无变化"; fi
 
       - name: 生成补齐版 charmap
@@ -77,8 +89,32 @@ jobs:
       - name: 同步产物到 tiers/（超 100MB 的压 zip）
         run: ./pack_tiers.sh
 
-      - name: 数据有更新时提交
-        if: env.UPDATED == '0'
+      - name: 上传六份产物 (artifacts)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: zhnum-build
+          # 入库形态 (超 100MB 的已压 zip) + 数据表 —— 提交 job 直接拿这份,
+          # 不必再跑一次构建
+          path: |
+            tiers/
+            unihan-*.tsv
+          retention-days: 90
+
+  commit:
+    needs: build
+    if: needs.build.outputs.updated == '0'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write           # 只有这个 job 需要写
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
+        with:
+          name: zhnum-build
+          path: .
+
+      - name: 提交重建产物
         run: |
           git config user.name  "zhnum-bot"
           git config user.email "actions@github.com"
@@ -89,10 +125,3 @@ jobs:
             git commit -m "周构建: Unihan 数据更新 → 六份重建 ($(date -u +%F))"
             git push origin HEAD:main
           fi
-
-      - name: 上传六份产物 (artifacts)
-        uses: actions/upload-artifact@v4
-        with:
-          name: zhnum-tiers-${{ github.run_number }}
-          path: tiers/        # 入库形态 (超 100MB 的已压 zip), 约 225MB
-          retention-days: 90

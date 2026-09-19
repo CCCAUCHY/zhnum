@@ -4,13 +4,8 @@ Nautilus 的排序做法 = 每个文件名算一次 GLib 文件名排序键 (逐
 比较。此处按同样口径测: 500 个键的生成耗时 + 按键排序耗时。
 """
 import sys, os, time, random, locale
-HERE = os.path.dirname(os.path.abspath(__file__))
-sys.argv = ['gen', '0', '/nonexistent']
-src = open(os.path.join(HERE, 'gen_zhnum.py'), encoding='utf-8').read()
-ns = {'__file__': os.path.join(HERE, 'gen_zhnum.py')}
-exec(compile(src[:src.index('# ---- 全量枚举 r×U') if '# ---- 全量枚举 r×U' in src
-                   else src.index('# ---- 全量枚举 r×u')], 'gen', 'exec'), ns)
-read = ns['read']
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from zhnum_core import read
 
 locale.setlocale(locale.LC_ALL, 'zhnum.UTF-8')
 from gi.repository import GLib

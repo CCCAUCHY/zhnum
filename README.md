@@ -16,7 +16,7 @@
 | `zhbase` | 默认排序源：汉字按 Unihan 笔画数 → 部首 → 仓颉 → 码点排序（简繁同块混排），兼容汉字与各族文字整块在后 |
 | `zhnum` | `copy zhbase` + 数字槽：中文数字串注册为多字符排序元素，按数值排序 |
 
-`zhnum` 编译时以 `zhbase` 为 copy 源，两者需同在 `/usr/share/i18n/locales/`。
+`zhnum` 编译时以 `zhbase` 为 copy 源，两者需同目录可见。
 
 ## 排序机制
 
@@ -45,8 +45,8 @@
 | `tiers/亿亿` | 10¹⁶ | `pure` | 210,842 | 25 ms |
 | `tiers/亿亿` | 10¹⁶ | `mixed` | 541,973 | 45 ms |
 
-`zhbase` 六份内容相同。万亿/亿亿 的 `mixed` 超出 GitHub 单文件上限，以
-`zhnum.zip` 入库（`unzip` 即得）。
+`zhbase` 六份内容相同，仓库里只放一份（`tiers/zhbase`）。万亿/亿亿 的
+`mixed` 超出 GitHub 单文件上限，以 `zhnum.zip` 入库（`unzip` 即得）。
 
 **性能上建议搭配 Nautilus（GNOME Files）使用**：数值槽在权重2 带影子（见
 How it works），中文数值区的键从第 2 字节起才有值——在这条路径上整组排在
@@ -90,16 +90,23 @@ LC_ALL=zhnum.UTF-8 LOCPATH=$PWD/out/亿/loc python3 verify.py   # 末行应显�
 
 ## 产物
 
-`tiers/<档>/<版本>/` 下是 glibc locale **源文件**——`localedef` 的输入：
+`tiers/` 下是 glibc locale **源文件**——`localedef` 的输入：
 
-| 文件 | 内容 |
-|------|------|
-| `zhbase` | 默认排序源（汉字单块 + 兼容汉字 + 脚本行）|
-| `zhnum` | 数字槽排序；`copy "zhbase"`，故两者须同目录可见 |
-| `zhnum.zip` | 同 `zhnum`，仅因超出 GitHub 单文件上限而压缩；`unzip` 即得 |
+```
+tiers/
+  zhbase                  默认排序源（汉字单块 + 兼容汉字 + 脚本行）
+  <档>/<版本>/zhnum        数字槽排序   <档> ∈ {亿, 万亿, 亿亿}  <版本> ∈ {pure, mixed}
+  <档>/<版本>/zhnum.zip    同上，仅因超出 GitHub 单文件上限而压缩，`unzip` 即得
+```
 
-三档 × 两版本共六份，选哪份见上表。源文件是 UTF-8 文本，编译需带补齐版
-charmap（`gen-charmap.py` 生成，见构建段）。
+`zhbase` 六份内容相同，仓库里只放一份。`zhnum` 用 `copy "zhbase"`，
+**编译时两者须同目录可见**。源文件是 UTF-8 文本，编译需带补齐版 charmap
+（`gen-charmap.py` 生成，见构建段）。
+
+**编译耗时随元素量增长，慢不等于文件坏了**：`pure` 各份秒级到十几秒；
+`mixed` 明显更久——`万亿/mixed`（431,477 元素）在一台普通桌面机上约
+**351 秒**、内存变化几百 MB，元素最多的 `亿亿/mixed`（541,973 元素）更久。
+耗时由元素量决定，与文件是否完整无关。
 
 **怎么部署与本仓库无关**——放哪个目录、何时重编、给哪些程序用，各系统不同，
 自行决定。

@@ -9,12 +9,8 @@
 简繁: 数字类 贰/貳 叁/參 陆/陸; 单位类 万/萬 亿/億。
 """
 import sys, os, random, collections
-HERE = os.path.dirname(os.path.abspath(__file__))
-sys.argv = ['gen', '0', '/nonexistent']
-src = open(os.path.join(HERE, 'gen_zhnum.py'), encoding='utf-8').read()
-ns = {'__file__': os.path.join(HERE, 'gen_zhnum.py')}
-exec(compile(src[:src.index('# ---- 全量枚举 r×u')], 'gen', 'exec'), ns)
-read, D = ns['read'], ns['D']
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from zhnum_core import read, D
 
 DIG = '一二三四五六七八九'
 SBK = '十百千'

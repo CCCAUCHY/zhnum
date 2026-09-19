@@ -18,6 +18,11 @@ import zipfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = sys.argv[1] if len(sys.argv) > 1 else HERE
 URL = 'https://www.unicode.org/Public/UCD/latest/ucd/Unihan.zip'
+# 尺寸上限: 这条链路要解压外部数据, 无上限的 zip 可以被做成 zip bomb 打爆内存。
+# 取远大于实际值的阈值 (Unihan.zip 约 10MB, 单个成员解压后最大约 40MB),
+# 正常更新不受影响; 超阈值即报错退出, 不继续解压。
+MAX_ZIP = 64 * 1024 * 1024          # 下载字节数上限
+MAX_MEMBER = 256 * 1024 * 1024      # 单个成员解压后上限
 
 def parse():
     """返回 {字段: {码点: 值}}; kRSUnicode 取主部首 (首个条目).
@@ -25,12 +30,18 @@ def parse():
     kCangjie 在 DictionaryLikeData."""
     data = {'kTotalStrokes': {}, 'kRSUnicode': {}, 'kCangjie': {}}
     with urllib.request.urlopen(URL, timeout=120) as r:
-        raw = io.BytesIO(r.read())
-    with zipfile.ZipFile(raw) as z:
+        blob = r.read(MAX_ZIP + 1)
+    if len(blob) > MAX_ZIP:
+        raise SystemExit(f'Unihan.zip 超过 {MAX_ZIP} 字节上限, 中止')
+    with zipfile.ZipFile(io.BytesIO(blob)) as z:
         for member, fields in (('Unihan_IRGSources.txt', ('kTotalStrokes', 'kRSUnicode')),
                                ('Unihan_DictionaryLikeData.txt', ('kCangjie',))):
+            if z.getinfo(member).file_size > MAX_MEMBER:
+                raise SystemExit(f'{member} 解压后超过 {MAX_MEMBER} 字节上限, 中止')
             with z.open(member) as f:
-                for line in io.TextIOWrapper(f, 'utf-8'):
+                # 中央目录声明的尺寸可被伪造, 实际读取再卡一次
+                text = io.TextIOWrapper(io.BytesIO(f.read(MAX_MEMBER + 1)), 'utf-8')
+                for line in text:
                     if line.startswith('#') or not line.strip():
                         continue
                     cp, field, val = line.split('\t', 2)

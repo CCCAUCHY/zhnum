@@ -1,14 +1,26 @@
 #!/bin/bash
-# 同步产物到 tiers/<档>/<版本>/, 超 GitHub 100MB 单文件上限的压成 zhnum.zip
-# (zip 用 Python 的 zipfile。zhbase 三档两版本内容相同, 各目录自含一份便于
-# 直接 localedef。)
+# 汇总产物到 tiers/:
+#   tiers/zhbase                  —— 六份共用一份 (三档两版本的 zhbase 完全相同,
+#                                    脚本里先断言, 不同则报错而不是静默覆盖)
+#   tiers/<档>/<版本>/zhnum       —— 或 zhnum.zip (超 GitHub 100MB 单文件上限时)
+# zhnum 用 copy "zhbase", 编译时两者须同目录可见 —— 部署时把 zhbase 与所选
+# zhnum 放到一起即可 (见 README「产物」段)。
 set -e
 cd "$(dirname "$0")"
 LIMIT=104857600
+
+REF=out/亿-pure/zhbase
+for t in 亿 万亿 亿亿; do
+  for v in pure mixed; do
+    cmp -s "$REF" "out/$t-$v/zhbase" || {
+      echo "::error::out/$t-$v/zhbase 与 $REF 不同 —— zhbase 应六份相同" >&2; exit 1; }
+  done
+done
+mkdir -p tiers && cp "$REF" tiers/zhbase
+
 for t in 亿 万亿 亿亿; do
   for v in pure mixed; do
     d="tiers/$t/$v"; mkdir -p "$d"
-    cp "out/$t-$v/zhbase" "$d/zhbase"
     rm -f "$d/zhnum" "$d/zhnum.zip"
     if [ "$(stat -c%s "out/$t-$v/zhnum")" -gt "$LIMIT" ]; then
       (cd "out/$t-$v" && python3 -c "
@@ -28,3 +40,4 @@ with zipfile.ZipFile(sys.argv[1], 'w', compresslevel=9) as z:
     fi
   done
 done
+echo "  zhbase: $(du -h tiers/zhbase | cut -f1) (六份共用)"
