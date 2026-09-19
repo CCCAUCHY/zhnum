@@ -10,6 +10,15 @@ cd "$(dirname "$0")"
 LIMIT=104857600
 
 REF=out/亿-pure/zhbase
+# zhbase 的内容由 unihan-*.tsv 决定 —— 数据表比产物新说明 out/ 是旧数据编的,
+# 此时打包会把过期的 zhbase 提交上去 (实测踩过一次: 只核对了 zhnum 就打包,
+# 而 zhnum 不含汉字行、与笔画无关, 看不出问题)。这里直接拦住。
+for f in unihan-*.tsv; do
+  if [ "$f" -nt "$REF" ]; then
+    echo "::error::$f 比 $REF 新 —— out/ 是旧数据编的, 请先重建再打包" >&2
+    exit 1
+  fi
+done
 for t in 亿 万亿 亿亿; do
   for v in pure mixed; do
     cmp -s "$REF" "out/$t-$v/zhbase" || {
