@@ -1,18 +1,23 @@
 #!/bin/bash
 # 汇总产物到 tiers/:
-#   tiers/zhbase                  —— 六份共用一份 (三档两版本的 zhbase 完全相同,
-#                                    脚本里先断言, 不同则报错而不是静默覆盖)
-#   tiers/<档>/<版本>/zhnum       —— 或 zhnum.gz (超 GitHub 100MB 单文件上限时)
-# zhnum 用 copy "zhbase", 编译时两者须同目录可见 —— 部署时把 zhbase 与所选
-# zhnum 放到一起即可 (见 README「产物」段)。
+#   tiers/zhbase                 —— 六份共用一份 (内容由 unihan-*.tsv 决定, 六份
+#                                   逐字节相同; 下面会断言, 不同即报错)
+#   tiers/<档>-<版本>.tar.gz     —— 只装该版本的 zhnum
+# zhbase 不塞进每个包: 那样等于把共用文件复制六遍。zhnum 用 copy "zhbase",
+# 编译时两者须同目录可见 —— 解开包再把 tiers/zhbase 放到一起即可。
+#
+# 为什么用 tar: 确定性元数据用标准 CLI 参数就能表达 (--sort/--mtime/--owner/
+# --group/--numeric-owner), 不必手写归档格式; -C <dir> 让源目录位置不进归档。
+# 实测同一输入两次构建、以及从不同路径打包, 产物逐字节相同。
+# 压缩流本身仍随压缩器版本变 (与归档格式无关), 换构建环境后第一次运行会产生
+# 一次提交; 周构建环境固定, 之后稳定。
+#
+# 数据新鲜度: zhbase 的内容由 unihan-*.tsv 决定, 数据表比产物新说明 out/ 是
+# 旧数据编的, 此时打包会把过期内容提交上去 —— 直接拦住。
 set -e
 cd "$(dirname "$0")"
-LIMIT=104857600
 
 REF=out/亿-pure/zhbase
-# zhbase 的内容由 unihan-*.tsv 决定 —— 数据表比产物新说明 out/ 是旧数据编的,
-# 此时打包会把过期的 zhbase 提交上去 (实测踩过一次: 只核对了 zhnum 就打包,
-# 而 zhnum 不含汉字行、与笔画无关, 看不出问题)。这里直接拦住。
 for f in unihan-*.tsv; do
   if [ "$f" -nt "$REF" ]; then
     echo "::error::$f 比 $REF 新 —— out/ 是旧数据编的, 请先重建再打包" >&2
@@ -25,28 +30,17 @@ for t in 亿 万亿 亿亿; do
       echo "::error::out/$t-$v/zhbase 与 $REF 不同 —— zhbase 应六份相同" >&2; exit 1; }
   done
 done
-mkdir -p tiers && cp "$REF" tiers/zhbase
 
+rm -f tiers/*.tar.gz
+mkdir -p tiers
+cp "$REF" tiers/zhbase
 for t in 亿 万亿 亿亿; do
   for v in pure mixed; do
-    d="tiers/$t/$v"; mkdir -p "$d"
-    rm -f "$d/zhnum" "$d/zhnum.zip" "$d/zhnum.gz"
-    if [ "$(stat -c%s "out/$t-$v/zhnum")" -gt "$LIMIT" ]; then
-      (cd "out/$t-$v" && python3 -c "
-import sys, gzip
-# mtime=0: 不把源文件 mtime 写进 gz 头, 否则内容未变的产物每次构建都变字节,
-# 周构建因此产生无意义的提交。
-# 注意: 压缩流本身仍随 zlib/Python 版本变 (同机实测 gzip.compress 与 gzip CLI
-# 同数据压出的字节就不同), 所以换构建环境后第一次运行仍会产生一次提交。
-# 想彻底免掉这点, 只能不压缩、把超大文件切片 —— 代价是仓库大一个量级。
-with open(sys.argv[1], 'wb') as out:
-    out.write(gzip.compress(open('zhnum', 'rb').read(), compresslevel=9, mtime=0))
-" "$OLDPWD/$d/zhnum.gz")
-      echo "  $t/$v: zhnum.gz $(du -h "$d/zhnum.gz" | cut -f1)"
-    else
-      cp "out/$t-$v/zhnum" "$d/zhnum"
-      echo "  $t/$v: zhnum $(du -h "$d/zhnum" | cut -f1)"
-    fi
+    d="out/$t-$v"
+    tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner \
+        -czf "tiers/$t-$v.tar.gz" -C "$d" zhnum
+    printf '  %-10s %s\n' "$t-$v" "$(du -h "tiers/$t-$v.tar.gz" | cut -f1)"
   done
 done
-echo "  zhbase: $(du -h tiers/zhbase | cut -f1) (六份共用)"
+echo "  zhbase      $(du -h tiers/zhbase | cut -f1)  (六份共用)"
+echo "  合计 $(du -sh tiers | cut -f1)"
