@@ -102,7 +102,9 @@ jobs:
 
   commit:
     needs: build
-    if: needs.build.outputs.updated == '0'
+    # 数据有更新时才提交; 手动触发也走一遍 (产物无实质变化则内部自动跳过) ——
+    # 这样构建→artifact→提交这条交接链路随时可验证, 不必等 Unihan 真的更新。
+    if: needs.build.outputs.updated == '0' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write           # 只有这个 job 需要写
