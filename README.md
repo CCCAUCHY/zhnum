@@ -46,7 +46,7 @@
 | `tiers/亿亿` | 10¹⁶ | `mixed` | 541,973 | 45 ms |
 
 `zhbase` 六份内容相同。万亿/亿亿 的 `mixed` 超出 GitHub 单文件上限，以
-`zhnum.zip` 入库（解压即得，装机段有写法）。
+`zhnum.zip` 入库（`unzip` 即得）。
 
 **性能上建议搭配 Nautilus（GNOME Files）使用**：数值槽在权重2 带影子（见
 How it works），中文数值区的键从第 2 字节起才有值——在这条路径上整组排在
@@ -88,22 +88,21 @@ LC_ALL=zhnum.UTF-8 LOCPATH=$PWD/out/亿/loc python3 verify.py   # 末行应显�
 
 构建数据：`unihan-strokes.tsv`（kTotalStrokes，基本区）、`unihan-radicals.tsv`（kRSUnicode）、`unihan-cangjie.tsv`（kCangjie，BMP）；脚本行基表取自系统 `/usr/share/i18n/locales/iso14651_t1_common`。
 
-## 装机
+## 产物
 
-先选一档一版本（例如 `亿/mixed`），把两个源文件放到 glibc 的 locale 目录：
+`tiers/<档>/<版本>/` 下是 glibc locale **源文件**——`localedef` 的输入：
 
-```bash
-V=tiers/亿/mixed
-sudo install -m 0644 $V/zhbase /usr/share/i18n/locales/zhbase
-# 若该版本是 zhnum.zip（万亿/亿亿 的 mixed），先解压：
-#   unzip -p $V/zhnum.zip > /tmp/zhnum && sudo install -m 0644 /tmp/zhnum /usr/share/i18n/locales/zhnum
-sudo install -m 0644 $V/zhnum  /usr/share/i18n/locales/zhnum
-echo 'zhnum.UTF-8 UTF-8' | sudo tee -a /etc/locale.gen
-sudo locale-gen
-```
+| 文件 | 内容 |
+|------|------|
+| `zhbase` | 默认排序源（汉字单块 + 兼容汉字 + 脚本行）|
+| `zhnum` | 数字槽排序；`copy "zhbase"`，故两者须同目录可见 |
+| `zhnum.zip` | 同 `zhnum`，仅因超出 GitHub 单文件上限而压缩；`unzip` 即得 |
 
-换档或换版本只需重装这两个文件再 `sudo locale-gen`（`/etc/locale.gen` 不必重复添加）。
-使用时设 `LC_COLLATE=zhnum.UTF-8`。
+三档 × 两版本共六份，选哪份见上表。源文件是 UTF-8 文本，编译需带补齐版
+charmap（`gen-charmap.py` 生成，见构建段）。
+
+**怎么部署与本仓库无关**——放哪个目录、何时重编、给哪些程序用，各系统不同，
+自行决定。
 
 ## How it works
 
