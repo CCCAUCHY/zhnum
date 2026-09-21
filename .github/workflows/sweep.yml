@@ -98,7 +98,7 @@ jobs:
              python3 tools/sweep.py --tier "$T" --sample "$N" --seed "$SEED" \
                --workers 4 --report "$OUT"; then
             echo "✓ $T/$V 第 $R 轮 无错序"
-          else
+          elif [ -f "$OUT" ]; then
             echo "::error::$T/$V 第 $R 轮 发现错序, 证据已写入 $OUT"
             git config user.name  "zhnum-bot"
             git config user.email "actions@github.com"
@@ -110,5 +110,8 @@ jobs:
               git push -q origin HEAD:main && break
               echo "推送冲突, 第 $i 次重试"; sleep $((RANDOM % 10 + 5))
             done
+            exit 1
+          else
+            echo "::error::$T/$V 第 $R 轮 sweep.py 异常退出 (无证据文件, 不是错序)"
             exit 1
           fi

@@ -191,7 +191,7 @@ def main():
     hi = min(a.end or FRONTIER, FRONTIER)
     if a.sample:
         n_total = a.sample
-        ci = cj = 0
+        ci, cj = 0, 1                    # 不给 --chunk 就是整份一片
         if a.chunk:
             ci, cj = (int(x) for x in a.chunk.split('/'))
         per = (n_total + cj - 1) // cj
