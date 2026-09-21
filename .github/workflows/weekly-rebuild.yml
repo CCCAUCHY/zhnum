@@ -77,7 +77,22 @@ jobs:
           # 顺序放在编译之前 —— 有问题的源文件不必浪费一轮 localedef。
           python3 tools/lint_locale.py out/
 
+      - name: 产物有没有真变（没变就跳过编译）
+        id: tierdiff
+        run: |
+          # 这一步几秒, 后面那步 18 分钟。产物不只依赖 Unihan, 也依赖
+          # gen_zhnum.py/zhnum_core.py, 所以不能只看 Unihan 的更新标志 ——
+          # 直接比刚生成的源和仓库里的产物, 那才是"这次提交会不会变"。
+          # 实测过一整周: 七份 sha256 全同, 18 分钟编出来什么都没变。
+          set +e
+          python3 tools/tiers_diff.py
+          rc=$?
+          set -e
+          [ "$rc" -le 1 ] || { echo "::error::tiers_diff.py 异常退出 ($rc)"; exit 1; }
+          echo "changed=$rc" >> "$GITHUB_OUTPUT"
+
       - name: 编译 + verify（全绿才继续）
+        if: steps.tierdiff.outputs.changed == '1'
         run: |
           set -e
           for t in 亿 万亿 亿亿; do
@@ -92,6 +107,7 @@ jobs:
               echo "$t/$v: verify 全部通过"
             done
           done
+          echo "全部六份 verify 通过"
 
       - name: 同步产物到 tiers/（超 100MB 的压 gz）
         run: ./pack_tiers.sh
