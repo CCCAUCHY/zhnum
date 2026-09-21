@@ -216,11 +216,13 @@ def main():
     got = locale.setlocale(locale.LC_ALL)
     if 'zhnum' not in got:
         sys.exit(f'LC_ALL 不是 zhnum (实际 {got!r}) —— 检查 LC_ALL / LOCPATH')
-    # 前沿 = 该档的 TIER 本身 (构建时喂给 gen_zhnum.py 的那个值)。乘积枚举只
-    # 对 u < TIER 的单位做, 档位单位自己只注册到系数 r=1, 所以完美范围正好是
-    # [0, TIER]。曾经写成 "101 × 档位单位" 是错的 —— 那会把档外的值采进来,
-    # 报出的全是 README 明写接受的"出档退化"。
-    FRONTIER = {'亿': 10 ** 8, '万亿': 10 ** 12, '亿亿': 10 ** 16}[a.tier]
+    # 前沿 = 实测的完美范围右端 (不是喂给 gen_zhnum.py 的 TIER 参数):
+    #   min(100 × 档位单位, 1e12) —— 前者是 COEFS 基座 (系数表 r ≤ 100) 与
+    #   档位单位的乘积, 后者是全量枚举的最大连续覆盖 (9999×1e8 + 余数)。
+    #   亿档 ② 更紧 (1e10); 万亿/亿亿档 ① 更紧 (1e12) —— 亿亿档标称 1e16,
+    #   但 canon 的顶级单位恒为 亿, 1e12 以上只有孤立的 1e12 整数倍点。
+    #   拿标称 TIER 当范围会采到档外的值, 报出的全是「出档退化」假阳性。
+    FRONTIER = {'亿': 10 ** 10, '万亿': 10 ** 12, '亿亿': 10 ** 12}[a.tier]
     hi = min(a.end or FRONTIER, FRONTIER)
     if a.sample:
         n_total = a.sample
