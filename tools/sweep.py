@@ -242,6 +242,7 @@ def main():
         # n=100 万抽自 1e12 也有 ~0.5 对), 而相邻两条若是同一个值, "本条所有键 >
         # 上一条所有键"必然不成立 ⇒ 每轮至少误报一例。第一次真跑时 203 份证据
         # 全是这个, 逐份查过样本数组: 每例的前一条就是它自己。
+        n_drawn = n_this                      # 去重前抽了多少 (重建数组要用这个数)
         _VALS = sorted(set(rng.randrange(a.start, hi) for _ in range(n_this)))
         mode, idx_lo, idx_hi = f'sample 切片 {ci}/{cj}', 0, len(_VALS)
     else:
@@ -251,6 +252,7 @@ def main():
             span = (idx_hi - idx_lo + cj - 1) // cj
             idx_lo, idx_hi = idx_lo + ci * span, min(idx_hi, idx_lo + (ci + 1) * span)
         mode = 'seq'
+        n_drawn = idx_hi - idx_lo          # seq 模式不是随机抽样, 只是让字段齐备
 
     # 切片: 每片多带一条前驱 (不计数), 覆盖切片边界的值序
     n = idx_hi - idx_lo
@@ -281,17 +283,20 @@ def main():
     secs = time.time() - t0
 
     # 记录**无条件**写 (无错序也写)。样本数组不直接落盘 —— 它是
-    # sorted(random.Random(seed).randrange(start, hi) for _ in range(n_requested)),
+    # _r = random.Random(seed); sorted(set(_r.randrange(start, hi) for _ in range(n_drawn))),
     # 所以 seed + 区间 + 条数 + swp_sha256(=本文件) 就精确重建了它, 13 MB 变 200 字节。
     # 发现错序时另存一份字面数组 (.sample.gz), 那份才需要逐字节对。
     if a.report:
         rec = {'ok': not n_viol, 'tier': a.tier, 'styles': a.styles, 'mode': mode,
-               'n_requested': n, 'n_checked': n_ok, 'n_violations': n_viol,
+               'n_drawn': n_drawn, 'n_unique': len(_VALS) if _VALS is not None else n,
+               'n_checked': n_ok, 'n_violations': n_viol,
                'seed': a.seed, 'start': a.start, 'hi': hi, 'chunk': a.chunk,
                'secs': round(secs, 2), 'rate': round(n_ok / max(secs, 1e-9), 1),
                'violations': viol,
+               # n_drawn 是**去重前**的抽取数 —— 重建样本数组要用它, 不是 n_unique,
+               # 也不是 n_checked (后者还含每片多带的一条前驱)。
                'sample_expr': '_r = random.Random(%d); sorted(set(_r.randrange(%d, %d) '
-                              'for _ in range(%d)))' % (a.seed, a.start, hi, n),
+                              'for _ in range(%d)))' % (a.seed, a.start, hi, n_drawn),
                # 上面那行表达式重建出来的数组, 其 sha256 应当等于这个值 ——
                # 这样"种子就是数组"是可核对的, 不是一句声明。
                'sample_sha256': hashlib.sha256(
