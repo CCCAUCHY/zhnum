@@ -75,20 +75,30 @@ jobs:
           set -e
           CH="$GITHUB_WORKSPACE/charmaps/UTF-8"
           PAIRS="亿-pure 亿-mixed 万亿-pure 万亿-mixed 亿亿-pure 亿亿-mixed"
-          mkdir -p locroot/_base
-          cp tiers/zhbase locroot/_base/
-          # 基座只编一次 (42k 行, 约 1 分钟), 六个版本共用这个编译结果。
-          # 实测过: 目录里只有已编译的 zhbase.UTF-8、没有 zhbase 源时,
-          # zhnum 的 copy "zhbase" 照样解析成功 —— 所以不用给每个版本再编
-          # 一遍基座 (每 job 省 6 次)。
-          ( cd locroot/_base && LC_ALL=C localedef -f "$CH" -i "$PWD/zhbase" ./zhbase.UTF-8 )
+          pids=""
           for p in $PAIRS; do
             D="locroot/$p"; mkdir -p "$D"
             tar -xzf "tiers/$p.tar.gz" -C "$D"
-            cp -r locroot/_base/zhbase.UTF-8 "$D/"
-            ( cd "$D" && LC_ALL=C localedef -f "$CH" -i "$PWD/zhnum" ./zhnum.UTF-8 ) &
+            cp tiers/zhbase "$D/"            # copy "zhbase" 要的是**源文件**:
+                                             # runner 的 glibc 2.39 不会去用同目录
+                                             # 下已编译的 zhbase.UTF-8 (本机新版
+                                             # glibc 会, 所以本地测不出这个差异)
+            (
+              cd "$D"
+              LC_ALL=C localedef -f "$CH" -i "$PWD/zhbase" ./zhbase.UTF-8
+              LC_ALL=C localedef -f "$CH" -i "$PWD/zhnum"  ./zhnum.UTF-8
+            ) &
+            pids="$pids $!"
           done
-          wait
+          # 逐个 wait 而不是不带的 wait: 不带参数的 wait 不返回后台失败,
+          # 编译全挂这个步骤照样绿 —— 曾经因此整轮 0 条还报成功。
+          fail=0
+          for pid in $pids; do wait "$pid" || fail=1; done
+          [ "$fail" -eq 0 ] || { echo "::error::localedef 失败"; exit 1; }
+          for p in $PAIRS; do
+            [ -f "locroot/$p/zhnum.UTF-8/LC_COLLATE" ] || \
+              { echo "::error::locroot/$p 没有编出 zhnum.UTF-8"; exit 1; }
+          done
           echo "编译完成:"; ls locroot
       - name: 自适应轮次抽样（六个版本并行, GLib 路径）
         env:

@@ -45,6 +45,14 @@ README 讲这个 locale 是什么、怎么用；这里讲**改它的时候要知
   HEAD 不动索引，提交出来的树 = **本 job 检出时**的旧树 + 新文件 —— 会把别的
   job 刚提交的东西从树上抹掉（sweep 的证据文件曾因此恒只剩 1 个）。用
   `--mixed`：索引回到 origin/main，工作区新写的未跟踪文件不受影响。
+- **本地 glibc 比 runner 新，编译行为不能外推**。`localedef` 解析 `copy "x"`：
+  本机（CachyOS 新版）在目录里只有已编译的 `x.UTF-8`、没有源文件时能成功；
+  runner 的 Ubuntu 24.04 glibc 2.39 报 `cannot open locale definition file`。
+  所以编译时**源文件必须和 zhnum 同目录**。同类坑之前也踩过（CI 报值序错序、
+  本地复现不出）。凡涉及 glibc 行为的结论，以 runner 上的实测为准。
+- shell 里 `wait` **不带参数会吞掉后台任务的失败**：并行的六份 localedef 全挂，
+  步骤照样绿，job 报成功而抽样 0 条。要么逐个 `wait $pid`，要么事后正向断言
+  产物存在（现在是两者都做）。
 
 ## 完美范围的天花板（2026-09 发现，待改进）
 

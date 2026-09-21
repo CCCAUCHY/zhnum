@@ -212,8 +212,13 @@ def main():
     global _STYLES
     _STYLES = _PURE if a.styles == 'pure' else _MIXED
 
-    locale.setlocale(locale.LC_ALL, '')
-    got = locale.setlocale(locale.LC_ALL)
+    try:
+        locale.setlocale(locale.LC_ALL, '')
+        got = locale.setlocale(locale.LC_ALL)
+    except locale.Error as e:
+        print(f'locale 加载失败: {e} —— 检查 LC_ALL/LOCPATH, 以及该目录里'
+              f'有没有编出来的 zhnum.UTF-8', file=sys.stderr)
+        return 2
     if 'zhnum' not in got:
         print(f'LC_ALL 不是 zhnum (实际 {got!r}) —— 检查 LC_ALL / LOCPATH', file=sys.stderr)
         return 2

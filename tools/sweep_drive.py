@@ -71,6 +71,7 @@ def run_lane(tier, ver, ctx):
     tag = f'{tier}/{ver}'
     rate = PRIOR[ver]                    # 条/秒, 首轮用先验, 之后用实测
     total = n_viol = rounds = 0
+    script_err = False
     while True:
         remain = ctx.deadline - time.time()
         n = int(remain / ctx.margin * rate)
@@ -92,6 +93,7 @@ def run_lane(tier, ver, ctx):
                            env=dict(os.environ, LC_ALL='zhnum.UTF-8', LOCPATH=loc))
         dt = time.time() - t0
         if p.returncode >= 2 or not os.path.exists(rep):
+            script_err = True
             log(f'{tag} ✗ sweep.py 退出码 {p.returncode} (脚本错, 不是错序), '
                 f'本 lane 停止\n{p.stderr.strip()[-400:]}')
             break
@@ -107,8 +109,9 @@ def run_lane(tier, ver, ctx):
         commit_round(files, f'抽样 {tag} 第 {rounds} 轮: '
                             f'{"错序 %d 例" % rec["n_violations"] if rec["n_violations"] else "无错序"} '
                             f'({rec["n_checked"]} 条, run {ctx.run_id})')
-    log(f'{tag} 结束: {rounds} 轮 / {total} 条 / 错序 {n_viol} 例')
-    return total, n_viol
+    log(f'{tag} 结束: {rounds} 轮 / {total} 条 / 错序 {n_viol} 例'
+        + ('  ← 脚本错导致提前停止' if script_err else ''))
+    return total, n_viol, script_err
 
 
 def main():
@@ -148,7 +151,13 @@ def main():
         th.join()
     tot = sum(r[0] for r in res.values())
     vio = sum(r[1] for r in res.values())
-    log(f'全部 lane 结束: 共 {tot} 条, 错序 {vio} 例')
+    err = sum(1 for r in res.values() if r[2])
+    log(f'全部 lane 结束: 共 {tot} 条, 错序 {vio} 例'
+        + (f', {err} 条 lane 因脚本错停止' if err else ''))
+    # 退出码: 0 干净 / 1 发现错序 / 2 有 lane 脚本错 —— 后者必须让 job 变红,
+    # 否则"编译全挂、0 条"会伪装成成功 (踩过一次)。
+    if err:
+        return 2
     return 1 if vio else 0
 
 
