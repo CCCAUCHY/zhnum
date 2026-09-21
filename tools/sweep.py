@@ -21,7 +21,7 @@ zhnum_core.py。理由是把基准从"生成器自己的顺序"换成"按语言�
   python3 tools/sweep.py --tier 亿 --start 0 --count 10100000000 --chunk 1/75
 环境: LOCPATH 指向已编译的 locale 目录, LC_ALL=zhnum.UTF-8。
 """
-import argparse, locale, json, os, random, sys, time
+import argparse, ctypes, locale, json, os, random, sys, time
 from multiprocessing import Pool
 
 # ─────────────────────────── 独立实现: 整数 → 中文 ───────────────────────────
@@ -141,17 +141,38 @@ def _check_one(key, v, last):
     return None
 
 
+# GLib 的排序键是**字节串**, 但 gi 绑定会按 UTF-8 解码成 str —— 键里出现非
+# UTF-8 字节就抛 UnicodeDecodeError (实测 runner 的 Python 3.12 上必炸)。
+# 直接用 ctypes 调那个 C 函数拿原始字节, 不经解码; 顺带也去掉了 python3-gi
+# 依赖 (libglib 本来就在)。这就是 Nautilus 排序时调用的同一个函数。
+_libglib = ctypes.CDLL('libglib-2.0.so.0')
+_libglib.g_utf8_collate_key_for_filename.restype = ctypes.c_void_p
+_libglib.g_utf8_collate_key_for_filename.argtypes = [ctypes.c_char_p, ctypes.c_ssize_t]
+_libglib.g_free.argtypes = [ctypes.c_void_p]
+
+
+def glib_key(s):
+    p = _libglib.g_utf8_collate_key_for_filename(s.encode('utf-8'), -1)
+    if not p:
+        return b''
+    try:
+        return ctypes.string_at(p)
+    finally:
+        _libglib.g_free(p)
+
+
 def _worker(arg):
-    lo, hi = arg
+    lo, hi, styles = arg
+    # 显式接收而不是靠 fork 继承: Python 3.14 在 Linux 上已把 multiprocessing
+    # 默认启动方式从 fork 改为 spawn/forkserver —— 子进程会重新 import 模块,
+    # 主进程改过的模块级变量传不过去, 静默回落成 import 时的值。
+    global _STYLES
+    _STYLES = _PURE if styles == 'pure' else _MIXED
     # GLib 的排序走 C 库的 locale 状态 —— 只设 LC_ALL/LOCPATH 环境变量不生效,
     # 必须 setlocale (漏了它 GLib 会静默回落到 C 序, 键退化成字符串本身的字节,
     # 于是任何比较都无意义)。
     locale.setlocale(locale.LC_ALL, '')
-    from gi.repository import GLib
-    # 键转字节再比: GLib 的键给 strcmp 用, 逐字节; Python 的 str 按码点比,
-    # 对含代理项的键不等价。surrogateescape 保住原始字节。
-    key = lambda s: GLib.utf8_collate_key_for_filename(s, -1).encode(
-        'utf-8', 'surrogateescape')
+    key = glib_key
     last = {}
     n = 0
     t0 = time.time()
@@ -225,7 +246,7 @@ def main():
         hi2 = idx_hi if k == w - 1 else lo2 + per
         if lo2 >= hi2:
             break
-        jobs.append((max(idx_lo, lo2 - 1), hi2))
+        jobs.append((max(idx_lo, lo2 - 1), hi2, a.styles))
     print(f'tier={a.tier} {mode} 起始={idx_lo} 条数={n} workers={len(jobs)}', flush=True)
     with Pool(len(jobs), initializer=_init, initargs=(_VALS,)) as p:
         n_ok = 0

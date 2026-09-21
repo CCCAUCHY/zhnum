@@ -63,10 +63,10 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
         with:
           fetch-depth: 1
-      - name: 依赖（GLib 的 Python 绑定 —— 检测只走 GLib 路径）
+      - name: 依赖（libglib —— 检测只走 GLib 路径）
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq locales python3-gi gir1.2-glib-2.0
+          sudo apt-get install -y -qq locales libglib2.0-0   # sweep 用 ctypes 直调 libglib, 不需要 python3-gi
       - name: 生成补齐版 charmap
         run: python3 gen-charmap.py charmaps
       - name: 取出并编译该版本的 locale
