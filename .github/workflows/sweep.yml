@@ -1,0 +1,105 @@
+name: 抽样检测（每 6 小时）
+
+# sweep-level.txt 两行, 随时手改:
+#   第一行  档位 0-3 —— 每个版本跑几个**完全相同**的 job (各抽一遍, 只有随机
+#           种子不同)。0 = 不跑, 1 = 6 个 job, 2 = 12 个, 3 = 18 个。
+#   第二行  每个 job 的抽样条数, 默认 100000000 (一亿)。
+# 六版本 = 三档 (亿/万亿/亿亿) × 两写法版本 (pure/mixed)。
+# 任务量按「一个 job 大致 5 小时跑完」来调第二行, 不设超时: 跑不完就失败。
+on:
+  schedule:
+    - cron: '17 */6 * * *'    # 每 6 小时 (避开整点)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.mk.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - id: mk
+        run: |
+          set -e
+          lvl=$(sed -n 1p sweep-level.txt | tr -dc '0-9' | head -c1); [ -n "$lvl" ] || lvl=0
+          n=$(sed -n 2p sweep-level.txt | tr -dc '0-9'); [ -n "$n" ] || n=100000000
+          [ "$lvl" -le 3 ] || lvl=3
+          echo "档位=$lvl  每 job 抽样=$n"
+          [ "$lvl" -eq 0 ] && { echo "matrix=[]" >> "$GITHUB_OUTPUT"; exit 0; }
+          python3 -c "
+          import json
+          inc=[{'tier':t,'ver':v,'round':i}
+               for t in ('亿','万亿','亿亿') for v in ('pure','mixed') for i in range($lvl)]
+          print('matrix=' + json.dumps(inc))" >> "$GITHUB_OUTPUT"
+          echo "job 数 = $(( $lvl * 6 ))"
+
+  sweep:
+    needs: plan
+    if: needs.plan.outputs.matrix != '[]'
+    runs-on: ubuntu-24.04-4-cores     # 4 vCPU / 16 GB (需先在仓库设置里创建)
+    permissions:
+      contents: write                 # 只为自己那份错序证据提交
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          fetch-depth: 1
+      - name: 依赖（GLib 的 Python 绑定 —— 检测只走 GLib 路径）
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq locales python3-gi gir1.2-glib-2.0
+      - name: 生成补齐版 charmap
+        run: python3 gen-charmap.py charmaps
+      - name: 取出并编译该版本的 locale
+        env:
+          T: ${{ matrix.tier }}
+          V: ${{ matrix.ver }}
+        run: |
+          mkdir -p loc
+          tar -xzf "tiers/$T-$V.tar.gz" -C loc
+          cp tiers/zhbase loc/
+          cd loc
+          LC_ALL=C localedef -f "$GITHUB_WORKSPACE/charmaps/UTF-8" -i "$PWD/zhbase" ./zhbase.UTF-8
+          LC_ALL=C localedef -f "$GITHUB_WORKSPACE/charmaps/UTF-8" -i "$PWD/zhnum"  ./zhnum.UTF-8
+      - name: 抽样检测（GLib 路径）
+        env:
+          T: ${{ matrix.tier }}
+          V: ${{ matrix.ver }}
+          R: ${{ matrix.round }}
+        run: |
+          set -o pipefail
+          N=$(sed -n 2p sweep-level.txt | tr -dc '0-9'); [ -n "$N" ] || N=100000000
+          SEED=$(( GITHUB_RUN_NUMBER * 100 + R ))
+          mkdir -p reports
+          # 文件名唯一即可; 按完成日期分子目录
+          OUT="reports/$(date -u +%F)/$T-$V-r$R-$GITHUB_RUN_NUMBER.json"
+          echo "抽样 $N 条, 种子 $SEED, 证据路径 $OUT"
+          if LC_ALL=zhnum.UTF-8 LOCPATH="$PWD/loc" \
+             python3 tools/sweep.py --tier "$T" --sample "$N" --seed "$SEED" \
+               --workers 4 --report "$OUT"; then
+            echo "✓ $T/$V 第 $R 轮 无错序"
+          else
+            echo "::error::$T/$V 第 $R 轮 发现错序, 证据已写入 $OUT"
+            git config user.name  "zhnum-bot"
+            git config user.email "actions@github.com"
+            for i in 1 2 3 4 5; do
+              git fetch -q origin main
+              git reset -q --soft origin/main
+              git add -f "$OUT"
+              git commit -q -m "抽样检测发现错序: $T/$V 第 $R 轮 ($(date -u +%F))" || true
+              git push -q origin HEAD:main && break
+              echo "推送冲突, 第 $i 次重试"; sleep $((RANDOM % 10 + 5))
+            done
+            exit 1
+          fi
