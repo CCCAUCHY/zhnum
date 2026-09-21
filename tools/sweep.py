@@ -216,7 +216,11 @@ def main():
     got = locale.setlocale(locale.LC_ALL)
     if 'zhnum' not in got:
         sys.exit(f'LC_ALL 不是 zhnum (实际 {got!r}) —— 检查 LC_ALL / LOCPATH')
-    FRONTIER = {'亿': 101 * 10 ** 8, '万亿': 101 * 10 ** 12, '亿亿': 101 * 10 ** 16}[a.tier]
+    # 前沿 = 该档的 TIER 本身 (构建时喂给 gen_zhnum.py 的那个值)。乘积枚举只
+    # 对 u < TIER 的单位做, 档位单位自己只注册到系数 r=1, 所以完美范围正好是
+    # [0, TIER]。曾经写成 "101 × 档位单位" 是错的 —— 那会把档外的值采进来,
+    # 报出的全是 README 明写接受的"出档退化"。
+    FRONTIER = {'亿': 10 ** 8, '万亿': 10 ** 12, '亿亿': 10 ** 16}[a.tier]
     hi = min(a.end or FRONTIER, FRONTIER)
     if a.sample:
         n_total = a.sample
