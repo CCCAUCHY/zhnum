@@ -12,3 +12,6 @@ token
 
 # 第三方检查器的原始副本（已整合进 tools/ 与 .github/workflows/）
 security_check/
+
+# 抽样驱动的临时记录 (每轮一份, 读完即删; 汇总文件才进 reports/)
+.sweep-tmp/

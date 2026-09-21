@@ -307,9 +307,10 @@ def main():
         os.makedirs(os.path.dirname(a.report) or '.', exist_ok=True)
         with open(a.report, 'w', encoding='utf-8') as f:
             json.dump(rec, f, ensure_ascii=False, indent=2)
-        if n_viol and _VALS is not None:
-            with gzip.open(a.report + '.sample.gz', 'wt', encoding='utf-8') as f:
-                f.write('\n'.join(map(str, _VALS)))
+        # 不再另存字面样本数组: 按 seed/n_drawn/hi 重建出来的数组逐位相同
+        # (验过), 而一份数组 ~4 MB gz —— 203 份就把仓库从 75 MB 撑到 751 MB。
+        # 要字面数组的话:  _r = random.Random(seed); sorted(set(_r.randrange(start, hi)
+        # for _ in range(n_drawn)))
     print(f'{"✗ 发现 %d 例错序" % n_viol if n_viol else "全部通过"} ({n_ok} 条, '
           f'{secs:.1f}s, {n_ok/max(secs,1e-9):.0f} 条/秒)', flush=True)
     return 1 if n_viol else 0

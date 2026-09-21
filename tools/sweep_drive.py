@@ -72,6 +72,7 @@ def run_lane(tier, ver, ctx):
     rate = PRIOR[ver]                    # 条/秒, 首轮用先验, 之后用实测
     total = n_viol = rounds = 0
     script_err = False
+    recs = []                            # 本 lane 各轮的记录, 累积进一个文件
     while True:
         remain = ctx.deadline - time.time()
         n = int(remain / ctx.margin * rate)
@@ -82,33 +83,55 @@ def run_lane(tier, ver, ctx):
                 f'({ctx.round_min} 条 ≈ {ctx.round_min / rate / 60:.0f} 分)')
             break
         seed = ctx.seed_base + rounds * 104729
-        rep = os.path.join(ctx.report_dir, time.strftime('%F', time.gmtime()),
-                           f'{tier}-{ver}-r{rounds}-{ctx.run_id}.json')
-        os.makedirs(os.path.dirname(rep), exist_ok=True)
+        # sweep.py 把这一轮的记录写到临时文件; 读进来后累积进**每 lane 每次运行
+        # 一个**的汇总文件。不每轮一个文件: 那样 18 个 job 一天几百个文件。
+        # 文件名只含 (档, 版本, run-id) —— 唯一, 所以并行 job 不会互相覆盖
+        # (它们各自加自己的行也不行: 同一个文件被两边改写会丢内容)。
+        tmp = os.path.join(ROOT, '.sweep-tmp', f'{tier}-{ver}-r{rounds}-{ctx.run_id}.json')
+        os.makedirs(os.path.dirname(tmp), exist_ok=True)
         cmd = [sys.executable, SWEEP, '--tier', tier, '--styles', ver,
                '--sample', str(n), '--seed', str(seed), '--workers', str(ctx.workers),
-               '--report', rep]
+               '--report', tmp]
         t0 = time.time()
         p = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT,
                            env=dict(os.environ, LC_ALL='zhnum.UTF-8', LOCPATH=loc))
         dt = time.time() - t0
-        if p.returncode >= 2 or not os.path.exists(rep):
+        if p.returncode >= 2 or not os.path.exists(tmp):
             script_err = True
             log(f'{tag} ✗ sweep.py 退出码 {p.returncode} (脚本错, 不是错序), '
                 f'本 lane 停止\n{p.stderr.strip()[-400:]}')
             break
-        rec = json.load(open(rep, encoding='utf-8'))
+        rec = json.load(open(tmp, encoding='utf-8'))
+        os.remove(tmp)
         rate = max(rec['rate'], 1.0)     # 实测速度, 下一轮按它排
         rounds += 1
         total += rec['n_checked']
         n_viol += rec['n_violations']
+        # 瘦身: 绿色轮次只留"能复算这一轮"的要素 (~250 字节), 错序轮次才带上
+        # 写法/键 (那才是要分析的)。不瘦的话一年光是绿色记录也有上百 MB。
+        slim = {k: rec[k] for k in ('n_drawn', 'n_unique', 'n_checked', 'secs',
+                                    'rate', 'ok', 'n_violations', 'seed', 'hi',
+                                    'sample_sha256') if k in rec}
+        slim['k'] = rounds
+        if rec.get('violations'):
+            slim['violations'] = rec['violations']
+        recs.append(slim)
         mark = '✗' if rec['n_violations'] else '✓'
         log(f'{tag} {mark} 第 {rounds} 轮 {rec["n_checked"]} 条 {dt / 60:.1f} 分 '
             f'{rate:.0f} 条/秒 剩 {remain / 60:.0f} 分 → 下轮 {min(ctx.round_max, int(max(1, (remain - dt) / ctx.margin * rate)))} 条')
-        files = [rep] + ([rep + '.sample.gz'] if os.path.exists(rep + '.sample.gz') else [])
-        commit_round(files, f'抽样 {tag} 第 {rounds} 轮: '
-                            f'{"错序 %d 例" % rec["n_violations"] if rec["n_violations"] else "无错序"} '
-                            f'({rec["n_checked"]} 条, run {ctx.run_id})')
+        agg = os.path.join(ctx.report_dir, time.strftime('%F', time.gmtime()),
+                           f'{tier}-{ver}-{ctx.run_id}.json')
+        os.makedirs(os.path.dirname(agg), exist_ok=True)
+        with open(agg, 'w', encoding='utf-8') as f:
+            json.dump({'tier': tier, 'styles': ver, 'run_id': ctx.run_id,
+                       'start': 1, 'swp_sha256': rec.get('swp_sha256'),
+                       'loc_sha256': rec.get('loc_sha256'),
+                       'sample_expr_tpl': '_r = random.Random(<seed>); sorted(set('
+                                          '_r.randrange(<start>, <hi>) for _ in '
+                                          'range(<n_drawn>)))',
+                       'rounds': recs}, f, ensure_ascii=False, indent=1)
+        commit_round([agg], f'抽样 {tag} run {ctx.run_id}: {len(recs)} 轮 / {total} 条, '
+                            f'{"错序 %d 例" % n_viol if n_viol else "无错序"}')
     log(f'{tag} 结束: {rounds} 轮 / {total} 条 / 错序 {n_viol} 例'
         + ('  ← 脚本错导致提前停止' if script_err else ''))
     return total, n_viol, script_err
