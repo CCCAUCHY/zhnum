@@ -103,8 +103,13 @@ jobs:
             git config user.name  "zhnum-bot"
             git config user.email "actions@github.com"
             for i in 1 2 3 4 5; do
+              # --mixed 而不是 --soft: --soft 只挪 HEAD, 索引还是本 job 检出时
+              # 的旧树, 提交出来的树 = 旧树 + 本文件 —— 会把并行 job 刚提交的
+              # 证据文件从树上抹掉 (曾经 reports/ 里恒只有 1 个文件)。
+              # --mixed 会把索引重置到 origin/main, 工作区里新写的证据文件是
+              # 未跟踪的, 不受影响, 于是提交 = origin/main 的全部 + 本文件。
               git fetch -q origin main
-              git reset -q --soft origin/main
+              git reset -q --mixed origin/main
               git add -f "$OUT"
               git commit -q -m "抽样检测发现错序: $T/$V 第 $R 轮 ($(date -u +%F))" || true
               git push -q origin HEAD:main && break
