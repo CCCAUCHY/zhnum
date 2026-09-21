@@ -238,7 +238,11 @@ def main():
         per = (n_total + cj - 1) // cj
         n_this = max(0, min(per, n_total - ci * per))
         rng = random.Random(a.seed + ci * 7919)
-        _VALS = sorted(rng.randrange(a.start, hi) for _ in range(n_this))
+        # **必须去重**: 有放回抽样必然取到重复值 (n=90 万抽自 1e10, 期望 ~40 对;
+        # n=100 万抽自 1e12 也有 ~0.5 对), 而相邻两条若是同一个值, "本条所有键 >
+        # 上一条所有键"必然不成立 ⇒ 每轮至少误报一例。第一次真跑时 203 份证据
+        # 全是这个, 逐份查过样本数组: 每例的前一条就是它自己。
+        _VALS = sorted(set(rng.randrange(a.start, hi) for _ in range(n_this)))
         mode, idx_lo, idx_hi = f'sample 切片 {ci}/{cj}', 0, len(_VALS)
     else:
         idx_lo, idx_hi = max(a.start, 0), hi if not a.count else min(hi, a.start + a.count)
@@ -286,8 +290,8 @@ def main():
                'seed': a.seed, 'start': a.start, 'hi': hi, 'chunk': a.chunk,
                'secs': round(secs, 2), 'rate': round(n_ok / max(secs, 1e-9), 1),
                'violations': viol,
-               'sample_expr': '_r = random.Random(%d); sorted(_r.randrange(%d, %d) '
-                              'for _ in range(%d))' % (a.seed, a.start, hi, n),
+               'sample_expr': '_r = random.Random(%d); sorted(set(_r.randrange(%d, %d) '
+                              'for _ in range(%d)))' % (a.seed, a.start, hi, n),
                # 上面那行表达式重建出来的数组, 其 sha256 应当等于这个值 ——
                # 这样"种子就是数组"是可核对的, 不是一句声明。
                'sample_sha256': hashlib.sha256(
