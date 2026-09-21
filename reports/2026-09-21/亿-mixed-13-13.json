@@ -1,0 +1,54 @@
+{
+ "tier": "亿",
+ "styles": "mixed",
+ "run_id": "13-13",
+ "start": 1,
+ "swp_sha256": "55aefc40cb7172b5",
+ "loc_sha256": "ed5772713448618b",
+ "sample_expr_tpl": "_r = random.Random(<seed>); sorted(set(_r.randrange(<start>, <hi>) for _ in range(<n_drawn>)))",
+ "rounds": [
+  {
+   "n_drawn": 455791,
+   "n_unique": 455783,
+   "n_checked": 195698,
+   "secs": 1237.68,
+   "rate": 158.1,
+   "ok": false,
+   "n_violations": 1,
+   "seed": 1790028541,
+   "hi": 10000000000,
+   "sample_sha256": "c59ecbfaa466303f",
+   "k": 1,
+   "violations": [
+    {
+     "ok": false,
+     "kind": "值序",
+     "case": "裸数字",
+     "value": 4300057777,
+     "forms": [
+      "四十三亿零五万七千七百七十七",
+      "四十三億零五萬七千七百七十七",
+      "肆拾叁亿零伍万柒仟柒佰柒拾柒",
+      "肆拾參億零伍萬柒仟柒佰柒拾柒",
+      "四拾三亿零五万七仟七佰七拾七",
+      "四拾三億零五萬七仟七佰七拾七",
+      "肆十叁亿零伍万柒千柒百柒十柒",
+      "肆十參億零伍萬柒千柒百柒十柒"
+     ],
+     "keys": [
+      "01f18cafbee289bff0a3b8b7e28c8b010101f18cafbe01e289bf01f0a3b8b701e28c8b0101010101e289b1e289b9e289b1010101e289b101e289b901e289b1",
+      "01f18cafbee289bff0a3b8b7e28c8b010101f18cb08401e289bf01f0a3b8bd01e28c8b0101010101e289b1e289b9e289b1010101e289b101e289b901e289b1",
+      "01f18cafbee289bff0a3b8b7e28c8b010101f18cafbf01e289bf01f0a3b8b801e28c8c0101010101e289b1e289b9e289b1010101e289b101e289b901e289b1",
+      "01f18cafbee289bff0a3b8b7e28c8b010101f18cb08701e289bf01f0a3b8bb01e28c8c0101010101e289b1e289b9e289b1010101e289b101e289b901e289b1",
+      "01f18cafbee289bff0a3b8b7e28ba7e28ba1010101f18cb08301e289bf01f0a3b8bc01e28baa01e28ba10101010101e289b1e289b9e289b1010101e289b101e289b901e289b1",
+      "01f18cafbee289bff0a3b8b7e28ba7e28ba1010101f18cb08501e289bf01f0a3b8be01e28baa01e28ba10101010101e289b1e289b9e289b1010101e289b101e289b901e289b1",
+      "01f18cafbee289bff0a3b8b7e28ba7e28ba2010101f18cb08001e289bf01f0a3b8b901e28ba701e28ba20101010101e289b1e289b9e289b1010101e289b101e289b901e289b1",
+      "01f18cafbee289bff0a3b8b7e28ba7e28ba2010101f18cb08901e289bf01f0a3b8ba01e28ba701e28ba20101010101e289b1e289b9e289b1010101e289b101e289b901e289b1"
+     ],
+     "prev_max": "01f18cafbee289bff0a3b8b7e28c85010101f18cb08701e289bf01f0a3b8bb01e28c870101010101e289b1e289b9e289b1010101e289b101e289b901e289b1",
+     "n_checked": 195698
+    }
+   ]
+  }
+ ]
+}
