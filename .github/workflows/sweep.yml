@@ -3,8 +3,9 @@ name: 抽样检测（每 6 小时）
 # sweep-level.txt 两行, 随时手改:
 #   第一行  档位 0-3 —— 每个版本跑几个**完全相同**的 job (各抽一遍, 只有随机
 #           种子不同)。0 = 不跑, 1 = 6 个 job, 2 = 12 个, 3 = 18 个。
-#   第二行  每个 job 的抽样条数, 默认 20000000 (2000 万 —— 实测校准: 每值
-#           要算 8 写法 × 4 情形 = 32 个 GLib 键, 约 3.5 ms, 2000 万约 5 小时)。
+#   第二行  每个 job 的抽样条数。参考: 每值要算 8 写法 × 4 情形 = 32 个 GLib
+#           键, 约 3.5 ms ⇒ 2000 万约 5 小时 (单 job 上限 6 小时, 卡在预算内)。
+# 两行都必须有值 —— 读不到直接报错, 不用兜底默认。
 # 六版本 = 三档 (亿/万亿/亿亿) × 两写法版本 (pure/mixed)。
 # 任务量按「一个 job 大致 5 小时跑完」来调第二行, 不设超时: 跑不完就失败。
 on:
@@ -30,9 +31,11 @@ jobs:
       - id: mk
         run: |
           set -e
-          lvl=$(sed -n 1p sweep-level.txt | tr -dc '0-9' | head -c1); [ -n "$lvl" ] || lvl=0
-          n=$(sed -n 2p sweep-level.txt | tr -dc '0-9'); [ -n "$n" ] || n=20000000
-          [ "$lvl" -le 3 ] || lvl=3
+          lvl=$(sed -n 1p sweep-level.txt | tr -dc '0-9' | head -c1)
+          n=$(sed -n 2p sweep-level.txt | tr -dc '0-9')
+          [ -n "$lvl" ] || { echo "::error::sweep-level.txt 第一行(档位)读不到"; exit 1; }
+          [ -n "$n" ]   || { echo "::error::sweep-level.txt 第二行(抽样数)读不到"; exit 1; }
+          case "$lvl" in 0|1|2|3) ;; *) echo "::error::档位只能是 0-3, 实际 '$lvl'"; exit 1;; esac
           echo "档位=$lvl  每 job 抽样=$n"
           [ "$lvl" -eq 0 ] && { echo "matrix=[]" >> "$GITHUB_OUTPUT"; exit 0; }
           python3 -c "
@@ -84,7 +87,8 @@ jobs:
           R: ${{ matrix.round }}
         run: |
           set -o pipefail
-          N=$(sed -n 2p sweep-level.txt | tr -dc '0-9'); [ -n "$N" ] || N=20000000
+          N=$(sed -n 2p sweep-level.txt | tr -dc '0-9')
+          [ -n "$N" ] || { echo "::error::sweep-level.txt 第二行(抽样数)读不到"; exit 1; }
           SEED=$(( GITHUB_RUN_NUMBER * 100 + R ))
           mkdir -p reports
           # 文件名唯一即可; 按完成日期分子目录
