@@ -62,6 +62,49 @@
      "n_checked": 269759
     }
    ]
+  },
+  {
+   "n_drawn": 1000000,
+   "n_unique": 999945,
+   "n_checked": 90182,
+   "secs": 813.66,
+   "rate": 110.8,
+   "ok": false,
+   "n_violations": 1,
+   "seed": 1790217133,
+   "hi": 10000000000,
+   "sample_sha256": "4d316962d1484381",
+   "k": 3,
+   "violations": [
+    {
+     "ok": false,
+     "kind": "值序",
+     "case": "裸数字",
+     "value": 900024436,
+     "forms": [
+      "九亿零二万四千四百三十六",
+      "九億零二萬四千四百三十六",
+      "玖亿零贰万肆仟肆佰叁拾陆",
+      "玖億零貳萬肆仟肆佰參拾陸",
+      "九亿零二万四仟四佰三拾六",
+      "九億零二萬四仟四佰三拾六",
+      "玖亿零贰万肆千肆百叁十陆",
+      "玖億零貳萬肆千肆百參十陸"
+     ],
+     "keys": [
+      "01f18ca9ace289bff097acbee28c85010101f18ca9ac01e289bf01f097acbe01e28c850101010101e289b1e289b9e289b1010101e289b101e289b901e289b1",
+      "01f18ca9ace289bff097acbee28c85010101f18ca9af01e289bf01f097ad8401e28c850101010101e289b1e289b9e289b1010101e289b101e289b901e289b1",
+      "01f18ca9ace289bff097acbee28c85010101f18ca9ad01e289bf01f097acbf01e28c860101010101e289b1e289b9e289b1010101e289b101e289b901e289b1",
+      "01f18ca9ace289bff097acbee28c85010101f18ca9ae01e289bf01f097ad8701e28c870101010101e289b1e289b9e289b1010101e289b101e289b901e289b1",
+      "01f18ca9ace289bff097acbee28ba7e28b9e010101f18ca9ac01e289bf01f097ad8301e28baa01e28b9e0101010101e289b1e289b9e289b1010101e289b101e289b901e289b1",
+      "01f18ca9ace289bff097acbee28ba7e28b9e010101f18ca9af01e289bf01f097ad8501e28baa01e28b9e0101010101e289b1e289b9e289b1010101e289b101e289b901e289b1",
+      "01f18ca9ace289bff097acbee28ba7e28b9f010101f18ca9ad01e289bf01f097ad8001e28ba701e28b9f0101010101e289b1e289b9e289b1010101e289b101e289b901e289b1",
+      "01f18ca9ace289bff097acbee28ba7e28ba0010101f18ca9ae01e289bf01f097ad8901e28ba701e28ba00101010101e289b1e289b9e289b1010101e289b101e289b901e289b1"
+     ],
+     "prev_max": "01f18ca9ace289bff097acbee28bb7010101f18ca9af01e289bf01f097ad8401e28bb70101010101e289b1e289b9e289b1010101e289b101e289b901e289b1",
+     "n_checked": 90182
+    }
+   ]
   }
  ]
 }
