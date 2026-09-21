@@ -19,6 +19,49 @@
    "hi": 10000000000,
    "sample_sha256": "91e06f86ddc63a9b",
    "k": 1
+  },
+  {
+   "n_drawn": 1000000,
+   "n_unique": 999958,
+   "n_checked": 160034,
+   "secs": 813.01,
+   "rate": 196.8,
+   "ok": false,
+   "n_violations": 1,
+   "seed": 1790133277,
+   "hi": 10000000000,
+   "sample_sha256": "5fe304b68649b4e9",
+   "k": 2,
+   "violations": [
+    {
+     "ok": false,
+     "kind": "值序",
+     "case": "裸数字",
+     "value": 1600057519,
+     "forms": [
+      "十六亿零五万七千五百一十九",
+      "十六億零五萬七千五百一十九",
+      "拾陆亿零伍万柒仟伍佰壹拾玖",
+      "拾陸億零伍萬柒仟伍佰壹拾玖",
+      "十六亿零五万七仟五佰一拾九",
+      "十六億零五萬七仟五佰一拾九",
+      "拾陆亿零伍万柒千伍百壹十玖",
+      "拾陸億零伍萬柒千伍百壹十玖"
+     ],
+     "keys": [
+      "01f18caabce289bff0a3b4a7e28c93010101f18caabc01e289bf01f0a3b4a701e28c930101010101e289b1e289b9e289b1010101e289b101e289b901e289b1",
+      "01f18caabce289bff0a3b4a7e28c93010101f18caabf01e289bf01f0a3b4ad01e28c930101010101e289b1e289b9e289b1010101e289b101e289b901e289b1",
+      "01f18caabce289bff0a3b4a7e28c93010101f18caabd01e289bf01f0a3b4a801e28c940101010101e289b1e289b9e289b1010101e289b101e289b901e289b1",
+      "01f18caabce289bff0a3b4a7e28c93010101f18cab8101e289bf01f0a3b4ab01e28c940101010101e289b1e289b9e289b1010101e289b101e289b901e289b1",
+      "01f18caabce289bff0a3b4a7e28ba7e28ba5010101f18caabc01e289bf01f0a3b4ac01e28baa01e28ba50101010101e289b1e289b9e289b1010101e289b101e289b901e289b1",
+      "01f18caabce289bff0a3b4a7e28ba7e28ba5010101f18caabf01e289bf01f0a3b4ae01e28baa01e28ba50101010101e289b1e289b9e289b1010101e289b101e289b901e289b1",
+      "01f18caabce289bff0a3b4a7e28ba7e28ba6010101f18caabd01e289bf01f0a3b4a901e28ba701e28ba60101010101e289b1e289b9e289b1010101e289b101e289b901e289b1",
+      "01f18caabce289bff0a3b4a7e28ba7e28ba6010101f18cab8101e289bf01f0a3b4aa01e28ba701e28ba60101010101e289b1e289b9e289b1010101e289b101e289b901e289b1"
+     ],
+     "prev_max": "01f18caabce289bff0a3b4a7e28bbd010101f18cab8101e289bf01f0a3b4ab01e28bbe0101010101e289b1e289b9e289b1010101e289b101e289b901e289b1",
+     "n_checked": 160034
+    }
+   ]
   }
  ]
 }
