@@ -1,14 +1,26 @@
-name: 周构建（Unihan 更新检查 + 六份重建）
+name: 周构建（zhbase）／手动发布 zhnum
 
+# 两条路径, 靠触发方式分:
+#
+#   定时（每周一）—— **只做 zhbase**。Unihan 更新只影响 zhbase (实测: 改一笔
+#     笔画数, zhbase 变、zhnum 一字不变), 六个包 (tiers/<档>-<版本>.tar.gz)
+#     里装的只有 zhnum, 所以它们逐字节不变、不用重编。这里只生成一份 zhbase、
+#     编一次、跑默认序检查、覆盖 tiers/zhbase, 提交。约 1 分钟。
+#
+#   手动 dispatch —— **六个包全建**。zhnum 的发布只走这条路径: 全量重建、六份
+#     各编一次各 verify 一次 (18 分钟)、打包、连同 zhbase 一起提交。
+#
+# 六个版本 = 三档 (亿/万亿/亿亿) × 两写法版本 (pure/mixed)。六份 zhbase 逐字节
+# 相同 (基座与档无关), 所以上面只生成一份。
 on:
   schedule:
     - cron: '23 4 * * 1'   # 每周一 04:23 UTC (避开整点)
-  workflow_dispatch:        # 手动触发
+  workflow_dispatch:        # 手动触发 = 发布 zhnum
 
 # 权限按 job 给, 不在此处给全局 write:
 #   build  —— 只读。它要下载并解压外部数据 (Unihan.zip), 是与不可信输入打交道的
 #             那一步, 不该同时持有写权限、也不该让 GITHUB_TOKEN 落在 .git/config。
-#   commit —— 只在数据确有更新时运行, 不接触外部输入, 才给 contents: write。
+#   commit —— 不接触外部输入, 才给 contents: write。
 permissions:
   contents: read
 
@@ -19,8 +31,6 @@ jobs:
       contents: read
     env:
       CHARMAP: ${{ github.workspace }}/charmaps/UTF-8
-    outputs:
-      updated: ${{ steps.unihan.outputs.updated }}
     steps:
       # actions 一律钉到 commit SHA: tag 可被重新指向, SHA 不会。
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
@@ -40,7 +50,6 @@ jobs:
           python-version: '3.12'
 
       - name: 拉取最新 Unihan 数据
-        id: unihan
         run: |
           # 退出码: 0 = 有更新, 2 = 无变化, 其他 = 失败
           set +e
@@ -51,8 +60,7 @@ jobs:
             echo "::error::update-unihan.py 异常退出 ($rc)"
             exit 1
           fi
-          echo "updated=$rc" >> "$GITHUB_OUTPUT"
-          if [ "$rc" -eq 0 ]; then echo "Unihan: 有更新, 本次将提交重建产物"; else echo "Unihan: 无变化"; fi
+          [ "$rc" -eq 0 ] && echo "Unihan: 有更新" || echo "Unihan: 无变化"
 
       - name: 生成补齐版 charmap
         run: |
@@ -60,15 +68,21 @@ jobs:
           # 缺了它们 localedef 会静默丢弃对应 locale 行 ⇒ 这些字回落排到最前
           python3 gen-charmap.py charmaps
 
-      - name: 重建六份 locale 源（三档 × 两版本）
+      - name: 重建 locale 源（手动=六份, 定时=只 zhbase）
         run: |
-          for pair in "100000000 亿" "1000000000000 万亿" "10000000000000000 亿亿"; do
-            set -- $pair
-            for v in pure mixed; do
-              mkdir -p "out/$2-$v"
-              python3 gen_zhnum.py "$1" "out/$2-$v" "$v"
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            for pair in "100000000 亿" "1000000000000 万亿" "10000000000000000 亿亿"; do
+              set -- $pair
+              for v in pure mixed; do
+                mkdir -p "out/$2-$v"
+                python3 gen_zhnum.py "$1" "out/$2-$v" "$v"
+              done
             done
-          done
+          else
+            # 六份 zhbase 逐字节相同 (基座与档无关), 生成一份就够
+            mkdir -p out/zhbase-only
+            python3 gen_zhnum.py 100000000 out/zhbase-only pure
+          fi
 
       - name: 产物静态检查（生成阶段）
         run: |
@@ -77,13 +91,31 @@ jobs:
           # 顺序放在编译之前 —— 有问题的源文件不必浪费一轮 localedef。
           python3 tools/lint_locale.py out/
 
-      - name: 产物有没有真变（没变就跳过编译）
-        id: tierdiff
+      # ───────────── 定时路径: 只有 zhbase ─────────────
+      - name: 编译 zhbase + 默认序检查（定时路径）
+        if: github.event_name != 'workflow_dispatch'
         run: |
-          # 这一步几秒, 后面那步 18 分钟。产物不只依赖 Unihan, 也依赖
-          # gen_zhnum.py/zhnum_core.py, 所以不能只看 Unihan 的更新标志 ——
-          # 直接比刚生成的源和仓库里的产物, 那才是"这次提交会不会变"。
-          # 实测过一整周: 七份 sha256 全同, 18 分钟编出来什么都没变。
+          set -e
+          D=out/zhbase-only
+          mkdir -p "$D/loc"
+          ( cd "$D" && localedef -f "$CHARMAP" -i "$PWD/zhbase" ./loc/zhbase.UTF-8 )
+          set +e
+          OUT=$(LC_ALL=zhbase.UTF-8 LOCPATH="$PWD/$D/loc" python3 tools/zb_check.py)
+          rc=$?
+          set -e
+          echo "$OUT"
+          [ "$rc" -eq 0 ] || { echo "::error::zhbase 默认序检查未通过 (退出码 $rc)"; exit 1; }
+          cp "$D/zhbase" tiers/zhbase
+          echo "tiers/zhbase 已更新（六个包不含 zhbase, 不用动）"
+
+      # ───────────── 手动路径: 六个包全建 ─────────────
+      - name: 产物有没有真变（手动路径）
+        id: tierdiff
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          # 这一步几秒, 后面那步 18 分钟。直接比刚生成的源和仓库里的产物 ——
+          # 那才是"这次提交会不会变"。实测过一整周: 七份 sha256 全同,
+          # 18 分钟编出来什么都没变。
           set +e
           python3 tools/tiers_diff.py
           rc=$?
@@ -91,8 +123,8 @@ jobs:
           [ "$rc" -le 1 ] || { echo "::error::tiers_diff.py 异常退出 ($rc)"; exit 1; }
           echo "changed=$rc" >> "$GITHUB_OUTPUT"
 
-      - name: 编译 + verify（全绿才继续）
-        if: steps.tierdiff.outputs.changed == '1'
+      - name: 编译 + verify 六份（全绿才继续）
+        if: github.event_name == 'workflow_dispatch' && steps.tierdiff.outputs.changed == '1'
         run: |
           set -e
           for t in 亿 万亿 亿亿; do
@@ -109,7 +141,8 @@ jobs:
           done
           echo "全部六份 verify 通过"
 
-      - name: 同步产物到 tiers/（超 100MB 的压 gz）
+      - name: 同步产物到 tiers/（手动路径: 六个包 + zhbase）
+        if: github.event_name == 'workflow_dispatch'
         run: ./pack_tiers.sh
 
       - name: 产物静态检查（入库阶段）
@@ -117,12 +150,11 @@ jobs:
         # 检查器只扫名为 zhbase/zhnum 的文件, 压缩包不在其范围内 —— 压缩形态的
         # 检查由上面「生成阶段」在 out/ 上完成 (同一份内容, 未压缩)
 
-      - name: 上传六份产物 (artifacts)
+      - name: 上传产物 (artifacts)
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: zhnum-build
-          # 入库形态 (超 100MB 的已压 zip) + 数据表 —— 提交 job 直接拿这份,
-          # 不必再跑一次构建
+          # 入库形态 + 数据表 —— 提交 job 直接拿这份, 不必再跑一次构建
           path: |
             tiers/
             unihan-*.tsv
@@ -130,9 +162,8 @@ jobs:
 
   commit:
     needs: build
-    # 数据有更新时才提交; 手动触发也走一遍 (产物无实质变化则内部自动跳过) ——
-    # 这样构建→artifact→提交这条交接链路随时可验证, 不必等 Unihan 真的更新。
-    if: needs.build.outputs.updated == '0' || github.event_name == 'workflow_dispatch'
+    # 不设条件: 变了就提交, 没变内部自动跳过 —— 定时路径改的是 zhbase,
+    # 手动路径还可能带上六个包, 两边都靠 git 自己判断有没有东西可提。
     runs-on: ubuntu-latest
     permissions:
       contents: write           # 只有这个 job 需要写
@@ -144,7 +175,7 @@ jobs:
           name: zhnum-build
           path: .
 
-      - name: 提交重建产物
+      - name: 提交构建产物
         run: |
           git config user.name  "zhnum-bot"
           git config user.email "actions@github.com"
@@ -152,6 +183,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "产物无实质变化, 跳过提交"
           else
-            git commit -m "周构建: 重建产物 ($(date -u +%F))"
+            git commit -m "构建: 重建产物 ($(date -u +%F))"
             git push origin HEAD:main
           fi
