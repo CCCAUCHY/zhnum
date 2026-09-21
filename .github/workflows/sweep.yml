@@ -44,7 +44,11 @@ jobs:
   sweep:
     needs: plan
     if: needs.plan.outputs.matrix != '[]'
-    runs-on: ubuntu-24.04-4-cores     # 4 vCPU / 16 GB (需先在仓库设置里创建)
+    # 公共仓库的标准 runner 就是 4 CPU / 16 GB, 且免费无限量 (官方: "Use of the
+    # standard GitHub-hosted runners is free and unlimited on public repositories.")
+    # —— 不需要 larger runner (那才是公共仓库也按分钟计费的)。
+    # 单 job 硬上限 6 小时 (timeout-minutes 默认 360, 不可提升), 故抽样量按 5 小时调。
+    runs-on: ubuntu-24.04
     permissions:
       contents: write                 # 只为自己那份错序证据提交
     strategy:
