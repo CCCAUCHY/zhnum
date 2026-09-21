@@ -1,13 +1,17 @@
 name: 抽样检测（每 6 小时）
 
-# sweep-level.txt 两行, 随时手改:
-#   第一行  档位 0-3 —— 每个版本跑几个**完全相同**的 job (各抽一遍, 只有随机
-#           种子不同)。0 = 不跑, 1 = 6 个 job, 2 = 12 个, 3 = 18 个。
-#   第二行  每个 job 的抽样条数。参考: 每值要算 8 写法 × 4 情形 = 32 个 GLib
-#           键, 约 3.5 ms ⇒ 2000 万约 5 小时 (单 job 上限 6 小时, 卡在预算内)。
-# 两行都必须有值 —— 读不到直接报错, 不用兜底默认。
-# 六版本 = 三档 (亿/万亿/亿亿) × 两写法版本 (pure/mixed)。
-# 任务量按「一个 job 大致 5 小时跑完」来调第二行, 不设超时: 跑不完就失败。
+# sweep-level.txt 只有一行, 随时手改:
+#   第一行  job 数。默认 18 —— 每个 job 都跑**全部六个版本**(三档 亿/万亿/亿亿 ×
+#           两写法版本 pure/mixed), 18 个 job 彼此完全独立, 只有随机种子不同。
+#           0 = 不跑。多开 job 是为了多占 runner (公共仓库免费无限量), 不是为了
+#           互相校验 —— 一个 job 内的六条 lane 已经把这个 runner 的 4 个 vCPU
+#           喂满了 (6 条单进程 lane, 1.5× 超订, 不要再给每条 lane 开 worker)。
+#
+# 抽样条数没有旋钮: 每个 job 编一次 locale 后反复抽样, 每轮结束记下**实测**速度,
+# 按 job 剩余时间算下一轮抽多少条 (单轮上限 100 万, 下限 1 万, 装不下就收工)。
+# 预算 5 小时 (单 job 硬上限 6 小时), 编完还剩多少就抽多少。
+# 每轮结果都提交 (无错序也提交), 记录里带样本指纹: 种子 + 区间 + sweep.py 哈希
+# + locale 哈希 ⇒ 无错序的轮次也能精确重建样本数组; 发现错序那轮另存字面数组。
 on:
   schedule:
     - cron: '17 */6 * * *'    # 每 6 小时 (避开整点)
@@ -31,19 +35,13 @@ jobs:
       - id: mk
         run: |
           set -e
-          lvl=$(sed -n 1p sweep-level.txt | tr -dc '0-9' | head -c1)
-          n=$(sed -n 2p sweep-level.txt | tr -dc '0-9')
-          [ -n "$lvl" ] || { echo "::error::sweep-level.txt 第一行(档位)读不到"; exit 1; }
-          [ -n "$n" ]   || { echo "::error::sweep-level.txt 第二行(抽样数)读不到"; exit 1; }
-          case "$lvl" in 0|1|2|3) ;; *) echo "::error::档位只能是 0-3, 实际 '$lvl'"; exit 1;; esac
-          echo "档位=$lvl  每 job 抽样=$n"
-          [ "$lvl" -eq 0 ] && { echo "matrix=[]" >> "$GITHUB_OUTPUT"; exit 0; }
+          n=$(sed -n 1p sweep-level.txt | tr -dc '0-9')
+          [ -n "$n" ] || { echo "::error::sweep-level.txt 第一行(job 数)读不到"; exit 1; }
+          echo "job 数 = $n (每个 job 跑全部六个版本)"
+          [ "$n" -eq 0 ] && { echo "matrix=[]" >> "$GITHUB_OUTPUT"; exit 0; }
           python3 -c "
           import json
-          inc=[{'tier':t,'ver':v,'round':i}
-               for t in ('亿','万亿','亿亿') for v in ('pure','mixed') for i in range($lvl)]
-          print('matrix=' + json.dumps(inc))" >> "$GITHUB_OUTPUT"
-          echo "job 数 = $(( $lvl * 6 ))"
+          print('matrix=' + json.dumps([{'slot': i} for i in range($n)]))" >> "$GITHUB_OUTPUT"
 
   sweep:
     needs: plan
@@ -51,10 +49,11 @@ jobs:
     # 公共仓库的标准 runner 就是 4 CPU / 16 GB, 且免费无限量 (官方: "Use of the
     # standard GitHub-hosted runners is free and unlimited on public repositories.")
     # —— 不需要 larger runner (那才是公共仓库也按分钟计费的)。
-    # 单 job 硬上限 6 小时 (timeout-minutes 默认 360, 不可提升), 故抽样量按 5 小时调。
+    # 单 job 硬上限 6 小时 (timeout-minutes 默认 360, 不可提升): 按 5 小时预留,
+    # 编译 + 抽样都在里面。
     runs-on: ubuntu-24.04
     permissions:
-      contents: write                 # 只为自己那份错序证据提交
+      contents: write                 # 每一轮结果都提交 (无错序也提交)
     strategy:
       fail-fast: false
       matrix:
@@ -63,60 +62,44 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
         with:
           fetch-depth: 1
+      - name: 记 job 起点（后面算剩余预算用）
+        run: echo "JOB_START=$(date +%s)" >> "$GITHUB_ENV"
       - name: 依赖（libglib —— 检测只走 GLib 路径）
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq locales libglib2.0-0   # sweep 用 ctypes 直调 libglib, 不需要 python3-gi
       - name: 生成补齐版 charmap
         run: python3 gen-charmap.py charmaps
-      - name: 取出并编译该版本的 locale
-        env:
-          T: ${{ matrix.tier }}
-          V: ${{ matrix.ver }}
+      - name: 编译六个版本的 locale（整个 job 只编这一次）
         run: |
-          mkdir -p loc
-          tar -xzf "tiers/$T-$V.tar.gz" -C loc
-          cp tiers/zhbase loc/
-          cd loc
-          LC_ALL=C localedef -f "$GITHUB_WORKSPACE/charmaps/UTF-8" -i "$PWD/zhbase" ./zhbase.UTF-8
-          LC_ALL=C localedef -f "$GITHUB_WORKSPACE/charmaps/UTF-8" -i "$PWD/zhnum"  ./zhnum.UTF-8
-      - name: 抽样检测（GLib 路径）
+          set -e
+          CH="$GITHUB_WORKSPACE/charmaps/UTF-8"
+          PAIRS="亿-pure 亿-mixed 万亿-pure 万亿-mixed 亿亿-pure 亿亿-mixed"
+          mkdir -p locroot/_base
+          cp tiers/zhbase locroot/_base/
+          # 基座只编一次 (42k 行, 约 1 分钟), 六个版本共用这个编译结果。
+          # 实测过: 目录里只有已编译的 zhbase.UTF-8、没有 zhbase 源时,
+          # zhnum 的 copy "zhbase" 照样解析成功 —— 所以不用给每个版本再编
+          # 一遍基座 (每 job 省 6 次)。
+          ( cd locroot/_base && LC_ALL=C localedef -f "$CH" -i "$PWD/zhbase" ./zhbase.UTF-8 )
+          for p in $PAIRS; do
+            D="locroot/$p"; mkdir -p "$D"
+            tar -xzf "tiers/$p.tar.gz" -C "$D"
+            cp -r locroot/_base/zhbase.UTF-8 "$D/"
+            ( cd "$D" && LC_ALL=C localedef -f "$CH" -i "$PWD/zhnum" ./zhnum.UTF-8 ) &
+          done
+          wait
+          echo "编译完成:"; ls locroot
+      - name: 自适应轮次抽样（六个版本并行, GLib 路径）
         env:
-          T: ${{ matrix.tier }}
-          V: ${{ matrix.ver }}
-          R: ${{ matrix.round }}
+          R: ${{ matrix.slot }}
         run: |
-          set -o pipefail
-          N=$(sed -n 2p sweep-level.txt | tr -dc '0-9')
-          [ -n "$N" ] || { echo "::error::sweep-level.txt 第二行(抽样数)读不到"; exit 1; }
-          SEED=$(( GITHUB_RUN_NUMBER * 100 + R ))
-          mkdir -p reports
-          # 文件名唯一即可; 按完成日期分子目录
-          OUT="reports/$(date -u +%F)/$T-$V-r$R-$GITHUB_RUN_NUMBER.json"
-          echo "抽样 $N 条, 种子 $SEED, 证据路径 $OUT"
-          if LC_ALL=zhnum.UTF-8 LOCPATH="$PWD/loc" \
-             python3 tools/sweep.py --tier "$T" --sample "$N" --seed "$SEED" \
-               --styles "$V" --workers 4 --report "$OUT"; then
-            echo "✓ $T/$V 第 $R 轮 无错序"
-          elif [ -f "$OUT" ]; then
-            echo "::error::$T/$V 第 $R 轮 发现错序, 证据已写入 $OUT"
-            git config user.name  "zhnum-bot"
-            git config user.email "actions@github.com"
-            for i in 1 2 3 4 5; do
-              # --mixed 而不是 --soft: --soft 只挪 HEAD, 索引还是本 job 检出时
-              # 的旧树, 提交出来的树 = 旧树 + 本文件 —— 会把并行 job 刚提交的
-              # 证据文件从树上抹掉 (曾经 reports/ 里恒只有 1 个文件)。
-              # --mixed 会把索引重置到 origin/main, 工作区里新写的证据文件是
-              # 未跟踪的, 不受影响, 于是提交 = origin/main 的全部 + 本文件。
-              git fetch -q origin main
-              git reset -q --mixed origin/main
-              git add -f "$OUT"
-              git commit -q -m "抽样检测发现错序: $T/$V 第 $R 轮 ($(date -u +%F))" || true
-              git push -q origin HEAD:main && break
-              echo "推送冲突, 第 $i 次重试"; sleep $((RANDOM % 10 + 5))
-            done
-            exit 1
-          else
-            echo "::error::$T/$V 第 $R 轮 sweep.py 异常退出 (无证据文件, 不是错序)"
-            exit 1
-          fi
+          set -e
+          BUDGET=$(( 18000 - ($(date +%s) - JOB_START) ))     # 5 小时减去已用
+          [ "$BUDGET" -gt 600 ] || { echo "::error::留给抽样的时间不足 ($BUDGET s)"; exit 1; }
+          echo "槽 $R: 抽样预算 $(( BUDGET / 60 )) 分, 六条 lane (每条单进程)"
+          python3 tools/sweep_drive.py \
+            --budget "$BUDGET" --round-max 1000000 --workers 1 \
+            --lanes 亿:pure,亿:mixed,万亿:pure,万亿:mixed,亿亿:pure,亿亿:mixed \
+            --loc-root "$PWD/locroot" \
+            --report-dir reports --run-id "$GITHUB_RUN_NUMBER-$R" --commit

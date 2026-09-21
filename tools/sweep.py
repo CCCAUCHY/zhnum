@@ -21,7 +21,7 @@ zhnum_core.py。理由是把基准从"生成器自己的顺序"换成"按语言�
   python3 tools/sweep.py --tier 亿 --start 0 --count 10100000000 --chunk 1/75
 环境: LOCPATH 指向已编译的 locale 目录, LC_ALL=zhnum.UTF-8。
 """
-import argparse, ctypes, locale, json, os, random, sys, time
+import argparse, ctypes, gzip, hashlib, locale, json, os, random, sys, time
 from multiprocessing import Pool
 
 # ─────────────────────────── 独立实现: 整数 → 中文 ───────────────────────────
@@ -215,7 +215,8 @@ def main():
     locale.setlocale(locale.LC_ALL, '')
     got = locale.setlocale(locale.LC_ALL)
     if 'zhnum' not in got:
-        sys.exit(f'LC_ALL 不是 zhnum (实际 {got!r}) —— 检查 LC_ALL / LOCPATH')
+        print(f'LC_ALL 不是 zhnum (实际 {got!r}) —— 检查 LC_ALL / LOCPATH', file=sys.stderr)
+        return 2
     # 前沿 = 实测的完美范围右端 (不是喂给 gen_zhnum.py 的 TIER 参数):
     #   ① 全量枚举封顶 1e12 (9999×1e8 + 余数) 与 ② 基座(系数表 r ≤ 100
     #   接在 ① 之上再 ×100) 取紧。亿档 ② 更紧 = 1e10; 万亿/亿亿档 ① 更紧
@@ -254,21 +255,62 @@ def main():
             break
         jobs.append((max(idx_lo, lo2 - 1), hi2, a.styles))
     print(f'tier={a.tier} {mode} 起始={idx_lo} 条数={n} workers={len(jobs)}', flush=True)
+    t0 = time.time()
+    viol, n_viol, n_ok = [], 0, 0
     with Pool(len(jobs), initializer=_init, initargs=(_VALS,)) as p:
-        n_ok = 0
         for r in p.imap_unordered(_worker, jobs):
             if not r['ok']:
-                print(f"✗ 错序: {r['kind']} 情形={r['case']} 值={r['value']}", flush=True)
-                print(f"  八种写法: {r['forms']}", flush=True)
-                if a.report:
-                    os.makedirs(os.path.dirname(a.report) or '.', exist_ok=True)
-                    with open(a.report, 'w', encoding='utf-8') as f:
-                        json.dump(r, f, ensure_ascii=False, indent=2)
-                sys.exit(1)
-            n_ok += r['n_checked']
-            print(f"  ✓ {r['n_checked']} 条  {r['secs']:.1f}s  {r['rate']:.0f} 条/秒", flush=True)
-    print(f'全部通过 ({n_ok} 条)', flush=True)
+                n_viol += 1
+                if len(viol) < 20:                   # 记前 20 例, 计数不封顶
+                    viol.append(r)
+                    print(f"✗ 错序: {r['kind']} 情形={r['case']} 值={r['value']}", flush=True)
+                    print(f"  八种写法: {r['forms']}", flush=True)
+            else:
+                print(f"  ✓ {r['n_checked']} 条  {r['secs']:.1f}s  {r['rate']:.0f} 条/秒",
+                      flush=True)
+            n_ok += r.get('n_checked', 0)
+    secs = time.time() - t0
+
+    # 记录**无条件**写 (无错序也写)。样本数组不直接落盘 —— 它是
+    # sorted(random.Random(seed).randrange(start, hi) for _ in range(n_requested)),
+    # 所以 seed + 区间 + 条数 + swp_sha256(=本文件) 就精确重建了它, 13 MB 变 200 字节。
+    # 发现错序时另存一份字面数组 (.sample.gz), 那份才需要逐字节对。
+    if a.report:
+        rec = {'ok': not n_viol, 'tier': a.tier, 'styles': a.styles, 'mode': mode,
+               'n_requested': n, 'n_checked': n_ok, 'n_violations': n_viol,
+               'seed': a.seed, 'start': a.start, 'hi': hi, 'chunk': a.chunk,
+               'secs': round(secs, 2), 'rate': round(n_ok / max(secs, 1e-9), 1),
+               'violations': viol,
+               'sample_expr': '_r = random.Random(%d); sorted(_r.randrange(%d, %d) '
+                              'for _ in range(%d))' % (a.seed, a.start, hi, n),
+               # 上面那行表达式重建出来的数组, 其 sha256 应当等于这个值 ——
+               # 这样"种子就是数组"是可核对的, 不是一句声明。
+               'sample_sha256': hashlib.sha256(
+                   ','.join(map(str, _VALS)).encode()).hexdigest()[:16] if _VALS is not None else '',
+               'sample_head': _VALS[:5] if _VALS is not None else [],
+               'swp_sha256': hashlib.sha256(open(__file__, 'rb').read()).hexdigest()[:16],
+               'loc_sha256': _loc_hash()}
+        os.makedirs(os.path.dirname(a.report) or '.', exist_ok=True)
+        with open(a.report, 'w', encoding='utf-8') as f:
+            json.dump(rec, f, ensure_ascii=False, indent=2)
+        if n_viol and _VALS is not None:
+            with gzip.open(a.report + '.sample.gz', 'wt', encoding='utf-8') as f:
+                f.write('\n'.join(map(str, _VALS)))
+    print(f'{"✗ 发现 %d 例错序" % n_viol if n_viol else "全部通过"} ({n_ok} 条, '
+          f'{secs:.1f}s, {n_ok/max(secs,1e-9):.0f} 条/秒)', flush=True)
+    return 1 if n_viol else 0
+
+
+def _loc_hash():
+    """已编译 locale 的 LC_COLLATE 摘要 —— 抽样结果要能对应到确切的排序表"""
+    try:
+        p = os.path.join(os.environ.get('LOCPATH', ''), 'zhnum.UTF-8', 'LC_COLLATE')
+        return hashlib.sha256(open(p, 'rb').read()).hexdigest()[:16]
+    except OSError:
+        return ''
 
 
 if __name__ == '__main__':
-    main()
+    # 退出码: 0 无错序 / 1 发现错序 / 2 环境或参数错 (调用方靠这个区分
+    # "检出 bug" 和 "脚本自己坏了")
+    sys.exit(main())
