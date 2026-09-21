@@ -82,9 +82,13 @@ def _cls(s):
     return g
 
 
-# 八种写法 = 数字类风格 × 单位类风格, 按用户口径配对 (不去重)
-_STYLES = ((0, 0), (0, 2), (1, 1), (2, 3),    # 全小写简/繁, 全大写简/繁
-           (0, 1), (0, 3), (1, 0), (2, 2))    # 小写数字+大写单位 简/繁, 大写数字+小写单位 简/繁
+# 写法组合 = 数字类风格 × 单位类风格 (不去重)。
+# mixed 版注册八种; pure 版只注册"同级配对"的四种 —— 拿八种去查 pure 必然误报,
+# 因为混搭写法它本来就没注册 (那是 pure 明示的取舍), 那些串会退化成多原子。
+_PURE = ((0, 0), (0, 2), (1, 1), (2, 3))
+_MIXED = ((0, 0), (0, 2), (1, 1), (2, 3),
+          (0, 1), (0, 3), (1, 0), (2, 2))
+_STYLES = _MIXED
 
 
 def forms(n):
@@ -180,8 +184,12 @@ def main():
     ap.add_argument('--seed', type=int, default=0)
     ap.add_argument('--chunk', default='', help='切片 i/n  (i 从 0 起)')
     ap.add_argument('--workers', type=int, default=os.cpu_count() or 2)
+    ap.add_argument('--styles', default='mixed', choices=['pure', 'mixed'],
+                    help='查哪些写法: mixed 八种 (默认), pure 四种')
     ap.add_argument('--report', default='', help='发现错序时把证据写到这个文件')
     a = ap.parse_args()
+    global _STYLES
+    _STYLES = _PURE if a.styles == 'pure' else _MIXED
 
     locale.setlocale(locale.LC_ALL, '')
     got = locale.setlocale(locale.LC_ALL)
@@ -226,6 +234,7 @@ def main():
                 print(f"✗ 错序: {r['kind']} 情形={r['case']} 值={r['value']}", flush=True)
                 print(f"  八种写法: {r['forms']}", flush=True)
                 if a.report:
+                    os.makedirs(os.path.dirname(a.report) or '.', exist_ok=True)
                     with open(a.report, 'w', encoding='utf-8') as f:
                         json.dump(r, f, ensure_ascii=False, indent=2)
                 sys.exit(1)

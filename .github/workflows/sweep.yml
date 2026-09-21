@@ -96,7 +96,7 @@ jobs:
           echo "抽样 $N 条, 种子 $SEED, 证据路径 $OUT"
           if LC_ALL=zhnum.UTF-8 LOCPATH="$PWD/loc" \
              python3 tools/sweep.py --tier "$T" --sample "$N" --seed "$SEED" \
-               --workers 4 --report "$OUT"; then
+               --styles "$V" --workers 4 --report "$OUT"; then
             echo "✓ $T/$V 第 $R 轮 无错序"
           elif [ -f "$OUT" ]; then
             echo "::error::$T/$V 第 $R 轮 发现错序, 证据已写入 $OUT"
