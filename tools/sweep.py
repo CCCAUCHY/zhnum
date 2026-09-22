@@ -7,8 +7,8 @@ zhnum_core.py。理由是把基准从"生成器自己的顺序"换成"按语言�
 
 检查内容 (对每个值, 四种情形各算一遍):
   情形      裸数字.txt / 第X章.txt / 篇X.txt / X篇.txt
-  写法      八种: 全小写(简/繁) 全大写(简/繁)
-            小写数字+大写单位(简/繁) 大写数字+小写单位(简/繁); 不去重。
+  写法      四种: 全小写(简/繁) 全大写(简/繁); 不去重。
+            (混搭写法曾一并检查, 2026-09 实测有跨风格错序, 已整体废弃。)
   断言      ① 值序: 值 v 的全部写法的排序键, 必须全部大于值 v-1 的全部键
             ② 同值内不等值: 同一值里两个不同的字符串, 键不得相等
 
@@ -82,17 +82,15 @@ def _cls(s):
     return g
 
 
-# 写法组合 = 数字类风格 × 单位类风格 (不去重)。
-# mixed 版注册八种; pure 版只注册"同级配对"的四种 —— 拿八种去查 pure 必然误报,
-# 因为混搭写法它本来就没注册 (那是 pure 明示的取舍), 那些串会退化成多原子。
+# 写法组合 = 数字类风格 × 单位类风格, 只取"同级配对"的四种 (不去重)。
+# 混搭组合 (小写数字+大写单位之类) 不是实际书写习惯, 且实测有跨风格错序
+# —— 查它们只会把"没注册"误报成错序, 已整体废弃。
 _PURE = ((0, 0), (0, 2), (1, 1), (2, 3))
-_MIXED = ((0, 0), (0, 2), (1, 1), (2, 3),
-          (0, 1), (0, 3), (1, 0), (2, 2))
-_STYLES = _MIXED
+_STYLES = _PURE
 
 
 def forms(n):
-    """n 的八种写法 (原样列出, 不去重)"""
+    """n 的四种写法 (原样列出, 不去重)"""
     s = canon(n)
     g = _cls(s)
     out = []
@@ -167,7 +165,7 @@ def _worker(arg):
     # 默认启动方式从 fork 改为 spawn/forkserver —— 子进程会重新 import 模块,
     # 主进程改过的模块级变量传不过去, 静默回落成 import 时的值。
     global _STYLES
-    _STYLES = _PURE if styles == 'pure' else _MIXED
+    _STYLES = _PURE
     # GLib 的排序走 C 库的 locale 状态 —— 只设 LC_ALL/LOCPATH 环境变量不生效,
     # 必须 setlocale (漏了它 GLib 会静默回落到 C 序, 键退化成字符串本身的字节,
     # 于是任何比较都无意义)。
@@ -205,12 +203,12 @@ def main():
     ap.add_argument('--seed', type=int, default=0)
     ap.add_argument('--chunk', default='', help='切片 i/n  (i 从 0 起)')
     ap.add_argument('--workers', type=int, default=os.cpu_count() or 2)
-    ap.add_argument('--styles', default='mixed', choices=['pure', 'mixed'],
-                    help='查哪些写法: mixed 八种 (默认), pure 四种')
+    ap.add_argument('--styles', default='pure', choices=['pure'],
+                    help='查哪些写法: pure 四种 (混搭已废弃)')
     ap.add_argument('--report', default='', help='发现错序时把证据写到这个文件')
     a = ap.parse_args()
     global _STYLES
-    _STYLES = _PURE if a.styles == 'pure' else _MIXED
+    _STYLES = _PURE
 
     try:
         locale.setlocale(locale.LC_ALL, '')

@@ -23,10 +23,10 @@ _DMAP = [
 ]
 # 单位类 4 形: 小写简 / 大写简 / 小写繁 / 大写繁
 # (萬 是繁体字不是财务字 ⇒ 简体全大写是 壹佰万, 繁体全大写是 壹佰萬)
-# 风格组合: 依版本取子集 —— pure 只含同级配对 (全小写/全大写), mixed 再加两套混搭
+# 风格组合: 同级配对两种 (全小写/全大写), 各带简繁 —— 混搭已废弃
 _PURE = ((0, 0), (1, 1), (0, 2), (2, 3))
 _MIXED = tuple((d, u) for d in range(3) for u in range(4))
-_STYLES = _PURE if os.environ.get('STYLES', 'mixed') == 'pure' else _MIXED
+_STYLES = _PURE          # 混搭已废弃, 只查纯写法
 _UMAP = [
     str.maketrans('', ''),
     str.maketrans(SBK, '拾佰仟'),

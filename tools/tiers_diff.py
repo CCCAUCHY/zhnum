@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """tiers_diff.py — 刚生成到 out/ 的产物与仓库 tiers/ 里的比一比, 是否真的变了。
 
-周构建的 `编译 + verify` 那步要 18 分钟(六份 locale 各编一次 + 各 verify
+周构建的 `编译 + verify` 那步要十几分钟(三份 locale 各编一次 + 各 verify
 一次)。但它只在**产物真的会变**时才有意义 —— Unihan 没更新、生成器也没改的
 周里, 重新编出来的东西和仓库里的逐字节相同, 18 分钟纯属白跑(实测过一次:
 七份产物 sha256 全同)。
@@ -29,17 +29,16 @@ def main():
         return 2
     diff, same = [], 0
     for t in TIERS:
-        for v in ('pure', 'mixed'):
-            src, tar = f'out/{t}-{v}/zhnum', f'tiers/{t}-{v}.tar.gz'
-            new = open(src, 'rb').read()
-            old = member(tar, 'zhnum')
-            if old is None:
-                diff.append(f'{t}-{v}: 归档里没有 zhnum')
-            elif hashlib.sha256(new).digest() != hashlib.sha256(old).digest():
-                diff.append(f'{t}-{v}: zhnum 有差异')
-            else:
-                same += 1
-    nb = open('out/亿-pure/zhbase', 'rb').read()
+        src, tar = f'out/{t}/zhnum', f'tiers/{t}.tar.gz'
+        new = open(src, 'rb').read()
+        old = member(tar, 'zhnum')
+        if old is None:
+            diff.append(f'{t}: 归档里没有 zhnum')
+        elif hashlib.sha256(new).digest() != hashlib.sha256(old).digest():
+            diff.append(f'{t}: zhnum 有差异')
+        else:
+            same += 1
+    nb = open('out/亿/zhbase', 'rb').read()
     ob = open('tiers/zhbase', 'rb').read()
     if hashlib.sha256(nb).digest() != hashlib.sha256(ob).digest():
         diff.append('zhbase: 有差异')

@@ -1,9 +1,9 @@
 #!/bin/bash
 # 汇总产物到 tiers/:
-#   tiers/zhbase                 —— 六份共用一份 (内容由 unihan-*.tsv 决定, 六份
+#   tiers/zhbase                 —— 三份共用一份 (内容由 unihan-*.tsv 决定, 三份
 #                                   逐字节相同; 下面会断言, 不同即报错)
-#   tiers/<档>-<版本>.tar.gz     —— 只装该版本的 zhnum
-# zhbase 不塞进每个包: 那样等于把共用文件复制六遍。zhnum 用 copy "zhbase",
+#   tiers/<档>.tar.gz            —— 只装该档的 zhnum
+# zhbase 不塞进每个包: 那样等于把共用文件复制三遍。zhnum 用 copy "zhbase",
 # 编译时两者须同目录可见 —— 解开包再把 tiers/zhbase 放到一起即可。
 #
 # 为什么用 tar: 确定性元数据用标准 CLI 参数就能表达 (--sort/--mtime/--owner/
@@ -17,7 +17,7 @@
 set -e
 cd "$(dirname "$0")"
 
-REF=out/亿-pure/zhbase
+REF=out/亿/zhbase
 for f in unihan-*.tsv; do
   if [ "$f" -nt "$REF" ]; then
     echo "::error::$f 比 $REF 新 —— out/ 是旧数据编的, 请先重建再打包" >&2
@@ -25,22 +25,18 @@ for f in unihan-*.tsv; do
   fi
 done
 for t in 亿 万亿 亿亿; do
-  for v in pure mixed; do
-    cmp -s "$REF" "out/$t-$v/zhbase" || {
-      echo "::error::out/$t-$v/zhbase 与 $REF 不同 —— zhbase 应六份相同" >&2; exit 1; }
-  done
+  cmp -s "$REF" "out/$t/zhbase" || {
+    echo "::error::out/$t/zhbase 与 $REF 不同 —— zhbase 应三份相同" >&2; exit 1; }
 done
 
 rm -f tiers/*.tar.gz
 mkdir -p tiers
 cp "$REF" tiers/zhbase
 for t in 亿 万亿 亿亿; do
-  for v in pure mixed; do
-    d="out/$t-$v"
-    tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner \
-        -czf "tiers/$t-$v.tar.gz" -C "$d" zhnum
-    printf '  %-10s %s\n' "$t-$v" "$(du -h "tiers/$t-$v.tar.gz" | cut -f1)"
-  done
+  d="out/$t"
+  tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner \
+      -czf "tiers/$t.tar.gz" -C "$d" zhnum
+  printf '  %-8s %s\n' "$t" "$(du -h "tiers/$t.tar.gz" | cut -f1)"
 done
-echo "  zhbase      $(du -h tiers/zhbase | cut -f1)  (六份共用)"
+echo "  zhbase    $(du -h tiers/zhbase | cut -f1)  (三份共用)"
 echo "  合计 $(du -sh tiers | cut -f1)"

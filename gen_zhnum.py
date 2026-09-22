@@ -67,21 +67,22 @@ import sys
 
 # ---- 参数化: python3 gen_zhnum.py TIER OUTDIR ----
 if len(sys.argv) < 3:
-    sys.exit('用法: python3 gen_zhnum.py TIER OUTDIR [pure|mixed]\n'
+    sys.exit('用法: python3 gen_zhnum.py TIER OUTDIR\n'
              '  TIER  完美范围上限 10**n (0 = 不枚举)\n'
              '  OUTDIR 输出目录\n'
-             '  pure  只注册全小写/全大写两套写法 (体积约一半)\n'
-             '  mixed 再加 小写数字+大写单位 / 大写数字+小写单位 两套 (默认)')
+             '只注册全小写/全大写两套写法 (各带简繁)。混搭写法 (小写数字+大写单位\n'
+             '之类) 不是实际书写习惯, 语料里几乎不出现, 且实测有跨风格错序、\n'
+             '编译还更慢 (亿-mixed 比 亿亿-pure 还久) —— 已整体废弃。')
 TIER = int(sys.argv[1])
 OUTDIR = sys.argv[2]
-STYLES = sys.argv[3] if len(sys.argv) > 3 else 'mixed'
+STYLES = 'pure'
 from zhnum_core import (TRUNC_LIMIT, read, u,
                         D, FIN, FIN_T, TR, TR_T, TRF_, TRFT_,
                         TRD_, TRDT_, TRU_,
                         alias_closure as _alias_closure)
 
 def alias_closure(s):
-    """本档写法版本的闭包 (STYLES 来自命令行第三参数)"""
+    """写法闭包 (只出全小写/全大写两套, 各带简繁 —— 混搭已废弃)"""
     return _alias_closure(s, STYLES)
 
 def in_tier(v):

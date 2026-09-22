@@ -1,17 +1,18 @@
 name: 抽样检测（每 6 小时）
 
 # sweep-level.txt 只有一行, 随时手改:
-#   第一行  job 数。默认 18 —— 每个 job 都跑**全部六个版本**(三档 亿/万亿/亿亿 ×
-#           两写法版本 pure/mixed), 18 个 job 彼此完全独立, 只有随机种子不同。
+#   第一行  job 数。默认 18 —— 每个 job 都跑**全部三个版本**(三档 亿/万亿/亿亿),
+#           18 个 job 彼此完全独立, 只有随机种子不同。
 #           0 = 不跑。多开 job 是为了多占 runner (公共仓库免费无限量), 不是为了
-#           互相校验 —— 一个 job 内的六条 lane 已经把这个 runner 的 4 个 vCPU
-#           喂满了 (6 条单进程 lane, 1.5× 超订, 不要再给每条 lane 开 worker)。
+#           互相校验 —— 一个 job 内的三条 lane 就把这个 runner 的 4 个 vCPU
+#           喂得差不多了 (3 条单进程 lane), 不必再给每条 lane 开 worker。
 #
+# 混搭写法已整体废弃, 只剩纯写法。
 # 抽样条数没有旋钮: 每个 job 编一次 locale 后反复抽样, 每轮结束记下**实测**速度,
 # 按 job 剩余时间算下一轮抽多少条 (单轮上限 100 万, 下限 1 万, 装不下就收工)。
 # 预算 5 小时 (单 job 硬上限 6 小时), 编完还剩多少就抽多少。
-# 每轮结果都提交 (无错序也提交), 记录里带样本指纹: 种子 + 区间 + sweep.py 哈希
-# + locale 哈希 ⇒ 无错序的轮次也能精确重建样本数组; 发现错序那轮另存字面数组。
+# 每轮结果都提交 (无错序也提交), 记录带样本指纹 (种子 + 区间 + sweep.py 哈希 +
+# locale 哈希) ⇒ 想拿字面数组随时能精确重建, 所以不存数组 (一份 ~4 MB)。
 on:
   schedule:
     - cron: '17 */6 * * *'    # 每 6 小时 (避开整点)
@@ -37,7 +38,7 @@ jobs:
           set -e
           n=$(sed -n 1p sweep-level.txt | tr -dc '0-9')
           [ -n "$n" ] || { echo "::error::sweep-level.txt 第一行(job 数)读不到"; exit 1; }
-          echo "job 数 = $n (每个 job 跑全部六个版本)"
+          echo "job 数 = $n (每个 job 跑全部三个版本)"
           [ "$n" -eq 0 ] && { echo "matrix=[]" >> "$GITHUB_OUTPUT"; exit 0; }
           python3 -c "
           import json
@@ -70,14 +71,14 @@ jobs:
           sudo apt-get install -y -qq locales libglib2.0-0   # sweep 用 ctypes 直调 libglib, 不需要 python3-gi
       - name: 生成补齐版 charmap
         run: python3 gen-charmap.py charmaps
-      - name: 编译六个版本的 locale（整个 job 只编这一次）
+      - name: 编译三个版本的 locale（整个 job 只编这一次）
         run: |
           set -e
           CH="$GITHUB_WORKSPACE/charmaps/UTF-8"
-          PAIRS="亿-pure 亿-mixed 万亿-pure 万亿-mixed 亿亿-pure 亿亿-mixed"
+          PAIRS="亿 万亿 亿亿"
           pids=""
           for p in $PAIRS; do
-            D="locroot/$p"; mkdir -p "$D"
+            D="locroot/$p-pure"; mkdir -p "$D"
             tar -xzf "tiers/$p.tar.gz" -C "$D"
             cp tiers/zhbase "$D/"            # copy "zhbase" 要的是**源文件**:
                                              # runner 的 glibc 2.39 不会去用同目录
@@ -96,20 +97,20 @@ jobs:
           for pid in $pids; do wait "$pid" || fail=1; done
           [ "$fail" -eq 0 ] || { echo "::error::localedef 失败"; exit 1; }
           for p in $PAIRS; do
-            [ -f "locroot/$p/zhnum.UTF-8/LC_COLLATE" ] || \
-              { echo "::error::locroot/$p 没有编出 zhnum.UTF-8"; exit 1; }
+            [ -f "locroot/$p-pure/zhnum.UTF-8/LC_COLLATE" ] || \
+              { echo "::error::locroot/$p-pure 没有编出 zhnum.UTF-8"; exit 1; }
           done
           echo "编译完成:"; ls locroot
-      - name: 自适应轮次抽样（六个版本并行, GLib 路径）
+      - name: 自适应轮次抽样（三个版本并行, GLib 路径）
         env:
           R: ${{ matrix.slot }}
         run: |
           set -e
           BUDGET=$(( 18000 - ($(date +%s) - JOB_START) ))     # 5 小时减去已用
           [ "$BUDGET" -gt 600 ] || { echo "::error::留给抽样的时间不足 ($BUDGET s)"; exit 1; }
-          echo "槽 $R: 抽样预算 $(( BUDGET / 60 )) 分, 六条 lane (每条单进程)"
+          echo "槽 $R: 抽样预算 $(( BUDGET / 60 )) 分, 三条 lane (每条单进程)"
           python3 tools/sweep_drive.py \
             --budget "$BUDGET" --round-max 1000000 --workers 1 \
-            --lanes 亿:pure,亿:mixed,万亿:pure,万亿:mixed,亿亿:pure,亿亿:mixed \
+            --lanes 亿:pure,万亿:pure,亿亿:pure \
             --loc-root "$PWD/locroot" \
             --report-dir reports --run-id "$GITHUB_RUN_NUMBER-$R" --commit

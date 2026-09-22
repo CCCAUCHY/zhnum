@@ -3,15 +3,15 @@ name: 周构建（zhbase）／手动发布 zhnum
 # 两条路径, 靠触发方式分:
 #
 #   定时（每周一）—— **只做 zhbase**。Unihan 更新只影响 zhbase (实测: 改一笔
-#     笔画数, zhbase 变、zhnum 一字不变), 六个包 (tiers/<档>-<版本>.tar.gz)
+#     笔画数, zhbase 变、zhnum 一字不变), 三个包 (tiers/<档>.tar.gz)
 #     里装的只有 zhnum, 所以它们逐字节不变、不用重编。这里只生成一份 zhbase、
 #     编一次、跑默认序检查、覆盖 tiers/zhbase, 提交。约 1 分钟。
 #
-#   手动 dispatch —— **六个包全建**。zhnum 的发布只走这条路径: 全量重建、六份
-#     各编一次各 verify 一次 (18 分钟)、打包、连同 zhbase 一起提交。
+#   手动 dispatch —— **三个包全建**。zhnum 的发布只走这条路径: 全量重建、三份
+#     各编一次各 verify 一次、打包、连同 zhbase 一起提交。
 #
-# 六个版本 = 三档 (亿/万亿/亿亿) × 两写法版本 (pure/mixed)。六份 zhbase 逐字节
-# 相同 (基座与档无关), 所以上面只生成一份。
+# 三个版本 = 三档 (亿/万亿/亿亿)。混搭写法已整体废弃。三份 zhbase 逐字节相同
+# (基座与档无关), 所以上面只生成一份。
 on:
   schedule:
     - cron: '23 4 * * 1'   # 每周一 04:23 UTC (避开整点)
@@ -68,20 +68,18 @@ jobs:
           # 缺了它们 localedef 会静默丢弃对应 locale 行 ⇒ 这些字回落排到最前
           python3 gen-charmap.py charmaps
 
-      - name: 重建 locale 源（手动=六份, 定时=只 zhbase）
+      - name: 重建 locale 源（手动=三份, 定时=只 zhbase）
         run: |
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
             for pair in "100000000 亿" "1000000000000 万亿" "10000000000000000 亿亿"; do
               set -- $pair
-              for v in pure mixed; do
-                mkdir -p "out/$2-$v"
-                python3 gen_zhnum.py "$1" "out/$2-$v" "$v"
-              done
+              mkdir -p "out/$2"
+              python3 gen_zhnum.py "$1" "out/$2"
             done
           else
-            # 六份 zhbase 逐字节相同 (基座与档无关), 生成一份就够
+            # 三份 zhbase 逐字节相同 (基座与档无关), 生成一份就够
             mkdir -p out/zhbase-only
-            python3 gen_zhnum.py 100000000 out/zhbase-only pure
+            python3 gen_zhnum.py 100000000 out/zhbase-only
           fi
 
       - name: 产物静态检查（生成阶段）
@@ -106,16 +104,16 @@ jobs:
           echo "$OUT"
           [ "$rc" -eq 0 ] || { echo "::error::zhbase 默认序检查未通过 (退出码 $rc)"; exit 1; }
           cp "$D/zhbase" tiers/zhbase
-          echo "tiers/zhbase 已更新（六个包不含 zhbase, 不用动）"
+          echo "tiers/zhbase 已更新（三个包不含 zhbase, 不用动）"
 
-      # ───────────── 手动路径: 六个包全建 ─────────────
+      # ───────────── 手动路径: 三个包全建 ─────────────
       - name: 产物有没有真变（手动路径）
         id: tierdiff
         if: github.event_name == 'workflow_dispatch'
         run: |
           # 这一步几秒, 后面那步 18 分钟。直接比刚生成的源和仓库里的产物 ——
-          # 那才是"这次提交会不会变"。实测过一整周: 七份 sha256 全同,
-          # 18 分钟编出来什么都没变。
+          # 那才是"这次提交会不会变"。实测过一整周: 全部 sha256 相同,
+          # 编译出来什么都没变。
           set +e
           python3 tools/tiers_diff.py
           rc=$?
@@ -123,25 +121,23 @@ jobs:
           [ "$rc" -le 1 ] || { echo "::error::tiers_diff.py 异常退出 ($rc)"; exit 1; }
           echo "changed=$rc" >> "$GITHUB_OUTPUT"
 
-      - name: 编译 + verify 六份（全绿才继续）
+      - name: 编译 + verify 三份（全绿才继续）
         if: github.event_name == 'workflow_dispatch' && steps.tierdiff.outputs.changed == '1'
         run: |
           set -e
           for t in 亿 万亿 亿亿; do
-            for v in pure mixed; do
-              mkdir -p "out/$t-$v/loc"
-              (cd "out/$t-$v" \
-               && localedef -f "$CHARMAP" -i "$PWD/zhbase" ./loc/zhbase.UTF-8 \
-               && localedef -f "$CHARMAP" -i "$PWD/zhnum"  ./loc/zhnum.UTF-8)
-              LC_ALL=zhnum.UTF-8 LOCPATH="$PWD/out/$t-$v/loc" \
-                python3 verify.py | tail -1 | grep -q '全部通过' \
-                || { echo "::error::$t/$v verify 未全绿"; exit 1; }
-              echo "$t/$v: verify 全部通过"
-            done
+            mkdir -p "out/$t/loc"
+            (cd "out/$t" \
+             && localedef -f "$CHARMAP" -i "$PWD/zhbase" ./loc/zhbase.UTF-8 \
+             && localedef -f "$CHARMAP" -i "$PWD/zhnum"  ./loc/zhnum.UTF-8)
+            LC_ALL=zhnum.UTF-8 LOCPATH="$PWD/out/$t/loc" \
+              python3 verify.py | tail -1 | grep -q '全部通过' \
+              || { echo "::error::$t verify 未全绿"; exit 1; }
+            echo "$t: verify 全部通过"
           done
-          echo "全部六份 verify 通过"
+          echo "三份 verify 全部通过"
 
-      - name: 同步产物到 tiers/（手动路径: 六个包 + zhbase）
+      - name: 同步产物到 tiers/（手动路径: 三个包 + zhbase）
         if: github.event_name == 'workflow_dispatch'
         run: ./pack_tiers.sh
 
@@ -163,7 +159,7 @@ jobs:
   commit:
     needs: build
     # 不设条件: 变了就提交, 没变内部自动跳过 —— 定时路径改的是 zhbase,
-    # 手动路径还可能带上六个包, 两边都靠 git 自己判断有没有东西可提。
+    # 手动路径还可能带上三个包, 两边都靠 git 自己判断有没有东西可提。
     runs-on: ubuntu-latest
     permissions:
       contents: write           # 只有这个 job 需要写
