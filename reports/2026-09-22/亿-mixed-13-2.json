@@ -75,6 +75,19 @@
      "n_checked": 790488
     }
    ]
+  },
+  {
+   "n_drawn": 172257,
+   "n_unique": 172256,
+   "n_checked": 172256,
+   "secs": 1246.83,
+   "rate": 138.2,
+   "ok": true,
+   "n_violations": 0,
+   "seed": 1790342706,
+   "hi": 10000000000,
+   "sample_sha256": "4fe8756f67167014",
+   "k": 4
   }
  ]
 }
