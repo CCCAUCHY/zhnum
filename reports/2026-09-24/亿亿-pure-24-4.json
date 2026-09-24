@@ -45,6 +45,19 @@
    "hi": 1000000000000,
    "sample_sha256": "6fb0b992af375d5f",
    "k": 3
+  },
+  {
+   "n_drawn": 1000000,
+   "n_unique": 999999,
+   "n_checked": 999999,
+   "secs": 1673.04,
+   "rate": 597.7,
+   "ok": true,
+   "n_violations": 0,
+   "seed": 1790564745,
+   "hi": 1000000000000,
+   "sample_sha256": "ba4cd83d5183df74",
+   "k": 4
   }
  ]
 }
