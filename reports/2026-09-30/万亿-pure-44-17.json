@@ -1,0 +1,89 @@
+{
+ "tier": "万亿",
+ "styles": "pure",
+ "run_id": "44-17",
+ "start": 1,
+ "swp_sha256": "a8d06d300f757399",
+ "loc_sha256": "67ed1e5a6ba86691",
+ "sample_expr_tpl": "_r = random.Random(<seed>); sorted(set(_r.randrange(<start>, <hi>) for _ in range(<n_drawn>)))",
+ "rounds": [
+  {
+   "n_drawn": 934956,
+   "n_unique": 934956,
+   "n_checked": 934956,
+   "secs": 1067.23,
+   "rate": 876.1,
+   "ok": true,
+   "n_violations": 0,
+   "seed": 1790720298,
+   "hi": 1000000000000,
+   "sample_sha256": "1433006ca8d921c4",
+   "k": 1
+  },
+  {
+   "n_drawn": 1000000,
+   "n_unique": 1000000,
+   "n_checked": 1000000,
+   "secs": 1302.83,
+   "rate": 767.6,
+   "ok": true,
+   "n_violations": 0,
+   "seed": 1790825027,
+   "hi": 1000000000000,
+   "sample_sha256": "4048ef9f86de49af",
+   "k": 2
+  },
+  {
+   "n_drawn": 1000000,
+   "n_unique": 1000000,
+   "n_checked": 1000000,
+   "secs": 972.98,
+   "rate": 1027.8,
+   "ok": true,
+   "n_violations": 0,
+   "seed": 1790929756,
+   "hi": 1000000000000,
+   "sample_sha256": "8777acbc2d84d13c",
+   "k": 3
+  },
+  {
+   "n_drawn": 1000000,
+   "n_unique": 999998,
+   "n_checked": 999998,
+   "secs": 1066.57,
+   "rate": 937.6,
+   "ok": true,
+   "n_violations": 0,
+   "seed": 1791034485,
+   "hi": 1000000000000,
+   "sample_sha256": "89bdb06726dd6437",
+   "k": 4
+  },
+  {
+   "n_drawn": 1000000,
+   "n_unique": 999999,
+   "n_checked": 999999,
+   "secs": 1282.37,
+   "rate": 779.8,
+   "ok": true,
+   "n_violations": 0,
+   "seed": 1791139214,
+   "hi": 1000000000000,
+   "sample_sha256": "38bcc87a18e16faa",
+   "k": 5
+  },
+  {
+   "n_drawn": 1000000,
+   "n_unique": 999999,
+   "n_checked": 999999,
+   "secs": 1291.59,
+   "rate": 774.2,
+   "ok": true,
+   "n_violations": 0,
+   "seed": 1791243943,
+   "hi": 1000000000000,
+   "sample_sha256": "8ab867f29388b957",
+   "k": 6
+  }
+ ]
+}
