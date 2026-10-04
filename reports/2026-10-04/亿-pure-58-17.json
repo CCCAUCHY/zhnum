@@ -1,0 +1,24 @@
+{
+ "tier": "亿",
+ "styles": "pure",
+ "run_id": "58-17",
+ "start": 1,
+ "swp_sha256": "a8d06d300f757399",
+ "loc_sha256": "aed3d6df81748e07",
+ "sample_expr_tpl": "_r = random.Random(<seed>); sorted(set(_r.randrange(<start>, <hi>) for _ in range(<n_drawn>)))",
+ "rounds": [
+  {
+   "n_drawn": 935791,
+   "n_unique": 935754,
+   "n_checked": 935754,
+   "secs": 659.17,
+   "rate": 1419.6,
+   "ok": true,
+   "n_violations": 0,
+   "seed": 1791093384,
+   "hi": 10000000000,
+   "sample_sha256": "8f7478dd6bead539",
+   "k": 1
+  }
+ ]
+}
