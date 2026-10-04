@@ -1,0 +1,102 @@
+{
+ "tier": "亿亿",
+ "styles": "pure",
+ "run_id": "57-7",
+ "start": 1,
+ "swp_sha256": "a8d06d300f757399",
+ "loc_sha256": "e14218852d901ccd",
+ "sample_expr_tpl": "_r = random.Random(<seed>); sorted(set(_r.randrange(<start>, <hi>) for _ in range(<n_drawn>)))",
+ "rounds": [
+  {
+   "n_drawn": 935634,
+   "n_unique": 935634,
+   "n_checked": 935634,
+   "secs": 1690.76,
+   "rate": 553.4,
+   "ok": true,
+   "n_violations": 0,
+   "seed": 1791062320,
+   "hi": 1000000000000,
+   "sample_sha256": "81a1753b52dfc69f",
+   "k": 1
+  },
+  {
+   "n_drawn": 1000000,
+   "n_unique": 1000000,
+   "n_checked": 1000000,
+   "secs": 1510.95,
+   "rate": 661.8,
+   "ok": true,
+   "n_violations": 0,
+   "seed": 1791167049,
+   "hi": 1000000000000,
+   "sample_sha256": "2a4e4aba0c5442bf",
+   "k": 2
+  },
+  {
+   "n_drawn": 1000000,
+   "n_unique": 999999,
+   "n_checked": 999999,
+   "secs": 1383.99,
+   "rate": 722.5,
+   "ok": true,
+   "n_violations": 0,
+   "seed": 1791271778,
+   "hi": 1000000000000,
+   "sample_sha256": "cb0d008724b6a732",
+   "k": 3
+  },
+  {
+   "n_drawn": 1000000,
+   "n_unique": 999999,
+   "n_checked": 999999,
+   "secs": 1586.27,
+   "rate": 630.4,
+   "ok": true,
+   "n_violations": 0,
+   "seed": 1791376507,
+   "hi": 1000000000000,
+   "sample_sha256": "9c2a456b6e11a28c",
+   "k": 4
+  },
+  {
+   "n_drawn": 1000000,
+   "n_unique": 999999,
+   "n_checked": 999999,
+   "secs": 1530.93,
+   "rate": 653.2,
+   "ok": true,
+   "n_violations": 0,
+   "seed": 1791481236,
+   "hi": 1000000000000,
+   "sample_sha256": "9078039ee3fa4689",
+   "k": 5
+  },
+  {
+   "n_drawn": 1000000,
+   "n_unique": 999999,
+   "n_checked": 999999,
+   "secs": 1836.39,
+   "rate": 544.5,
+   "ok": true,
+   "n_violations": 0,
+   "seed": 1791585965,
+   "hi": 1000000000000,
+   "sample_sha256": "2046fc66954dc35d",
+   "k": 6
+  },
+  {
+   "n_drawn": 1000000,
+   "n_unique": 1000000,
+   "n_checked": 1000000,
+   "secs": 1748.49,
+   "rate": 571.9,
+   "ok": true,
+   "n_violations": 0,
+   "seed": 1791690694,
+   "hi": 1000000000000,
+   "sample_sha256": "ac9b38eb08a5aae3",
+   "k": 7
+  }
+ ]
+}
