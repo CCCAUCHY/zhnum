@@ -188,6 +188,32 @@
    "hi": 1000000000000,
    "sample_sha256": "5ff6064312a2fd47",
    "k": 14
+  },
+  {
+   "n_drawn": 937902,
+   "n_unique": 937902,
+   "n_checked": 937902,
+   "secs": 1096.02,
+   "rate": 855.7,
+   "ok": true,
+   "n_violations": 0,
+   "seed": 1792528537,
+   "hi": 1000000000000,
+   "sample_sha256": "7253a7a8f813ef43",
+   "k": 15
+  },
+  {
+   "n_drawn": 24604,
+   "n_unique": 24604,
+   "n_checked": 24604,
+   "secs": 23.67,
+   "rate": 1039.2,
+   "ok": true,
+   "n_violations": 0,
+   "seed": 1792633266,
+   "hi": 1000000000000,
+   "sample_sha256": "9ed428180a181b5b",
+   "k": 16
   }
  ]
 }
