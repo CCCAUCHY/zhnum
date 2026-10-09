@@ -1,0 +1,50 @@
+{
+ "tier": "亿",
+ "styles": "pure",
+ "run_id": "72-7",
+ "start": 1,
+ "swp_sha256": "a8d06d300f757399",
+ "loc_sha256": "aed3d6df81748e07",
+ "sample_expr_tpl": "_r = random.Random(<seed>); sorted(set(_r.randrange(<start>, <hi>) for _ in range(<n_drawn>)))",
+ "rounds": [
+  {
+   "n_drawn": 935321,
+   "n_unique": 935269,
+   "n_checked": 935269,
+   "secs": 755.93,
+   "rate": 1237.2,
+   "ok": true,
+   "n_violations": 0,
+   "seed": 1791501810,
+   "hi": 10000000000,
+   "sample_sha256": "1bc56dab8c413f7d",
+   "k": 1
+  },
+  {
+   "n_drawn": 1000000,
+   "n_unique": 999955,
+   "n_checked": 999955,
+   "secs": 820.56,
+   "rate": 1218.6,
+   "ok": true,
+   "n_violations": 0,
+   "seed": 1791606539,
+   "hi": 10000000000,
+   "sample_sha256": "da5364d518f0de51",
+   "k": 2
+  },
+  {
+   "n_drawn": 1000000,
+   "n_unique": 999965,
+   "n_checked": 999965,
+   "secs": 830.42,
+   "rate": 1204.2,
+   "ok": true,
+   "n_violations": 0,
+   "seed": 1791711268,
+   "hi": 10000000000,
+   "sample_sha256": "9dfa5c5e7c0c1cf3",
+   "k": 3
+  }
+ ]
+}
