@@ -137,7 +137,7 @@ jobs:
           done
           echo "三份 verify 全部通过"
 
-      - name: 同步产物到 tiers/（手动路径: 三个包 + zhbase）
+      - name: 同步产物到 tiers/（手动路径, 三个包 + zhbase）
         if: github.event_name == 'workflow_dispatch'
         run: ./pack_tiers.sh
 
