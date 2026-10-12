@@ -1,12 +1,20 @@
-# zhbase: 默认排序源 — 全部汉字(含数字字)单块,
-#   块内 笔画/部首/仓颉/码点; 汉字行后 兼容汉字行 + 脚本行 (基表非空
-#   一级元素提升到汉字之上 ⇒ 中文连块 = 汉字块+兼容汉字尾巴+脚本区).
-#   被 zhnum 引用的契约:
-#   ① 单块结构 + 汉字行后兼容汉字/脚本行  ② 数字字按普通汉字进块 (zhnum 会覆盖)
-#   ③ 汉字行二级 <BASE> + 四级 <U0021> (借基表符号, zhnum 位置
-#      机制在二/四级的共同前提: 列上 汉字 < 数值槽)
-#   ④ 其余类别 copy zh_CN.  换默认排序(如拼音): 重写本文件保持契约.
-# 生成器: gen_zhnum.py: 汉字行 20992, 兼容汉字行 1054, 脚本行 20468
+escape_char /
+comment_char %
+
+% This file contains locale data.
+% The copyright holder does not claim any copyright interest in the
+% locale data contained in this file.  The foregoing does not affect the
+% license of this project as a whole.  It does not exempt you from the
+% conditions of the license if your use would otherwise be governed by
+% that license.
+
+% zhbase — collation source for Chinese: all CJK ideographs in one block,
+% ordered by stroke count, radical, cangjie code and code point; the
+% compatibility ideographs and the script ranges follow that block.
+
+% Ideograph ordering data is derived from the Unihan database
+% <https://www.unicode.org/Public/UNIDATA/Unihan.zip>, used under the
+% Unicode License v3 (see LICENSE-UNICODE).
 LC_CTYPE
 copy "zh_CN"
 END LC_CTYPE
@@ -48,7 +56,16 @@ copy "zh_CN"
 END LC_MEASUREMENT
 
 LC_IDENTIFICATION
-copy "zh_CN"
+title      "Chinese locale with numeric collation"
+source     "https:////github.com//CCCAUCHY//zhnum"
+address    ""
+contact    ""
+email      ""
+tel        ""
+fax        ""
+language   "Chinese"
+territory  "China"
+revision   "1.0"
 END LC_IDENTIFICATION
 
 LC_COLLATE

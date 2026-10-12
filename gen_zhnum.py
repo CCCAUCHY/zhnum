@@ -555,8 +555,34 @@ def emit_lines():
 lines, slot_order = emit_lines()
 
 # ---- 组装 ----
+# 头部与 LC_IDENTIFICATION 照上游 localedata/locales/* 的写法: 先 comment_char/
+# escape_char, 再数据声明, 再一句描述; 不写生成器、也不描述本文件引用了谁
+# (上游文件里没有这些)。数据声明改写自 glibc 各 locale 文件开头那段 —— 措辞
+# 不能照抄: 那句说的是"本文件是 GNU C Library 的一部分", 对我们这份还不成立。
 def cat(name):
+    if name == 'IDENTIFICATION':
+        return ['LC_IDENTIFICATION',
+                'title      "Chinese locale with numeric collation"',
+                'source     "https:////github.com//CCCAUCHY//zhnum"',
+                'address    ""',
+                'contact    ""',
+                'email      ""',
+                'tel        ""',
+                'fax        ""',
+                'language   "Chinese"',
+                'territory  "China"',
+                'revision   "1.0"',
+                'END LC_IDENTIFICATION']
     return [f'LC_{name}', 'copy "zh_CN"', f'END LC_{name}']
+
+DATA_NOTICE = [
+    '% This file contains locale data.',
+    '% The copyright holder does not claim any copyright interest in the',
+    '% locale data contained in this file.  The foregoing does not affect the',
+    '% license of this project as a whole.  It does not exempt you from the',
+    '% conditions of the license if your use would otherwise be governed by',
+    '% that license.',
+    '']
 
 CATEGORIES = ['CTYPE', 'NUMERIC', 'TIME', 'MONETARY', 'MESSAGES', 'PAPER',
               'NAME', 'ADDRESS', 'TELEPHONE', 'MEASUREMENT', 'IDENTIFICATION']
@@ -579,31 +605,34 @@ def build(header, copy_src, collate_rows, elems_list):
 
 hanzi_rows = [h[4] for h in all_rows] + compat_rows + script_rows
 f_zhbase = build(
-    ['# zhbase: 默认排序源 — 全部汉字(含数字字)单块,',
-     '#   块内 笔画/部首/仓颉/码点; 汉字行后 兼容汉字行 + 脚本行 (基表非空',
-     '#   一级元素提升到汉字之上 ⇒ 中文连块 = 汉字块+兼容汉字尾巴+脚本区).',
-     '#   被 zhnum 引用的契约:',
-     '#   ① 单块结构 + 汉字行后兼容汉字/脚本行  ② 数字字按普通汉字进块 (zhnum 会覆盖)',
-     '#   ③ 汉字行二级 <BASE> + 四级 <U0021> (借基表符号, zhnum 位置',
-     '#      机制在二/四级的共同前提: 列上 汉字 < 数值槽)',
-     '#   ④ 其余类别 copy zh_CN.  换默认排序(如拼音): 重写本文件保持契约.',
-     f'# 生成器: gen_zhnum.py: 汉字行 {len(all_rows)}, 兼容汉字行 {len(compat_rows)}, '
-     f'脚本行 {len(script_rows)}'],
+    # 顺序要紧: escape_char 必须先于 comment_char。实测两行都声明时, 顺序写反
+    # 会让 localedef 编出的 LC_COLLATE 膨胀 2.4 倍 (28.7 MB → 68.6 MB); 单独
+    # 声明任一行都正常。上游 localedata/locales/* 全是 escape_char 在前。
+    ['escape_char /',
+     'comment_char %',
+     '',
+     *DATA_NOTICE,
+     '% zhbase — collation source for Chinese: all CJK ideographs in one block,',
+     '% ordered by stroke count, radical, cangjie code and code point; the',
+     '% compatibility ideographs and the script ranges follow that block.',
+     '',
+     '% Ideograph ordering data is derived from the Unihan database',
+     '% <https://www.unicode.org/Public/UNIDATA/Unihan.zip>, used under the',
+     '% Unicode License v3 (see LICENSE-UNICODE).'],
     'iso14651_t1_common', hanzi_rows, [])
 open(OUT_ZHBASE, 'w', encoding='utf-8').write('\n'.join(f_zhbase))
 
 f_zhnum = build(
-    ['# zhnum: 拉丁 < 数字(值序) < 汉字(单块默认序) < 其他脚本',
-     '# 核心语义: 位置敏感族键 — 同(序数,量词)族聚族且族内纯数值序;',
-     '# 同值写法不等值: 相邻但 strcoll ≠ 0 (一 < 壹 < 1 < 二, 第十章 < 第10章).',
-     '# 机制: 权重1 骨架聚族 + 数值槽权重4 (借 iso14651 position, 汉字权重4低权);',
-     '# 权重2 影子: 槽/拉丁行 = IGNORE;<自身>;IGNORE;<槽>, 汉字行权重2 = <BASE>',
-     '# — strxfrm 语义不变 (位置分区在权重2 同构保持), GLib 文件',
-     '# 名键形 01 eX… ⇒ 阿拉伯 < 拉丁 < 中文连块 < 其他脚本.',
-     '# 默认排序(汉字单块+脚本行)整体引用自 zhbase (copy), 本文件只叠加数值覆盖.',
-     f'# 生成器: gen_zhnum.py: 复合元素 {len(elems)}, 数值槽 {len(slots)}, '
-     f'数字行 {len(lines)} (无汉字行 — 继承 zhbase {len(all_rows)} 汉字行 '
-     f'+ {len(compat_rows)} 兼容汉字 + {len(script_rows)} 脚本行)'],
+    # 顺序要紧: escape_char 必须先于 comment_char。实测两行都声明时, 顺序写反
+    # 会让 localedef 编出的 LC_COLLATE 膨胀 2.4 倍 (28.7 MB → 68.6 MB); 单独
+    # 声明任一行都正常。上游 localedata/locales/* 全是 escape_char 在前。
+    ['escape_char /',
+     'comment_char %',
+     '',
+     *DATA_NOTICE,
+     '% zhnum — numeric collation for Chinese numerals: a numeral string is',
+     '% compared by the number it denotes rather than character by character',
+     '% (一 < 二 < 十 < 十一 < 一百 < 一百零一 < 一千).'],
     'zhbase', lines, elems)
 open(OUT_ZHNUM, 'w', encoding='utf-8').write('\n'.join(f_zhnum))
 

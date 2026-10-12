@@ -58,6 +58,21 @@ README 讲这个 locale 是什么、怎么用；这里讲**改它的时候要知
 - shell 里 `wait` **不带参数会吞掉后台任务的失败**：并行的六份 localedef 全挂，
   步骤照样绿，job 报成功而抽样 0 条。要么逐个 `wait $pid`，要么事后正向断言
   产物存在（现在是两者都做）。
+- **locale 源头部的声明顺序要紧**：`escape_char` 必须在 `comment_char` 之前。
+  实测六份对照编译（同一份 zhnum、同一台机器）：
+
+  | 头部声明 | 编出的 LC_COLLATE |
+  |---------|------------------|
+  | 都不声明 | 28,670,538 |
+  | 只 `comment_char %` | 28,670,538 |
+  | 只 `escape_char /` | 28,670,538 |
+  | 两行都声明、`comment_char` 在前 | **68,626,718**（2.4 倍）✗ |
+  | 两行都声明、`escape_char` 在前 | 28,670,538 ✓ |
+
+  顺序写反时 **localedef 不报任何错**，只是表膨胀——照抄上游
+  `localedata/locales/*` 的顺序（escape_char 在前）即可。同源的惯例还有一条：
+  `escape_char /` 生效时字符串里的字面斜杠要写两遍（上游 zh_CN 的地址就写作
+  `https:////www.gnu.org//software//libc//`）。
 
 ## 抽样证据的留存口径（为了不撑爆仓库）
 
