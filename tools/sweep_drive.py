@@ -21,14 +21,14 @@
 
 用法:
   python3 tools/sweep_drive.py --budget 18000 --round-max 1000000 --workers 4 \\
-      --lanes 亿:mixed --loc-root /tmp/loc --report-dir reports --run-id 123 --commit
+      --lanes 亿:pure --loc-root /tmp/loc --report-dir reports --run-id 123 --commit
 """
 import argparse, json, os, random, subprocess, sys, threading, time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SWEEP = os.path.join(ROOT, 'tools', 'sweep.py')
 TIERS = ('亿', '万亿', '亿亿')
-VERS = ('pure', 'mixed')
+VERS = ('pure',)
 # 首轮用的保守先验 (条/秒): 只在小预算时才起作用 (大预算下首轮直接顶到上限)。
 # 实测本机 4 worker: 亿 mixed ~600 / 万亿 ~330 / 亿亿 ~167, 单进程再除以 ~4。
 PRIOR = {'pure': 60.0, 'mixed': 30.0}

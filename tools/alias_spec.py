@@ -49,12 +49,6 @@ def classify(s):
 def forms8(s):
     g = classify(s)
     out = []
-    for dm in _DMAP:
-        for um in _UMAP:
-            out.append(''.join((dm if grp == 'd' else um).get(c, c)
-                               if False else c for c, grp in zip(s, g)))
-    # 上面的写法不适用 dict.get, 改为逐字符 translate
-    out = []
     for di, ui in _STYLES:
         r = []
         for c, grp in zip(s, g):
@@ -92,14 +86,14 @@ v = sorted(set([1,2,9,10,11,19,20,99,100,101,110,111,999,1000,1001,1010,1011,
                 1100,1110,1999,2000,9999,10000,10001,10100,11000,99999,100000,
                 1000000,1010000,99999999]) | set(random.sample(range(1, 10**8), 2000)))
 print()
-run(v, '裸数 (边界+随机 2000)')
+total_err = run(v, '裸数 (边界+随机 2000)')
 # 复合: r×万 / r×亿 —— 读数 = read(r) + 单位, 闭包作用在整串上
-RMAX = int(os.environ.get('RMAX', '101'))
-run(sorted(set(random.sample(range(1, 10000), 400))), '万级 (随机 400)') if False else None
+RMAX = int(os.environ.get('RMAX', '100'))
 rw = sorted(set([1,2,9,10,11,100,101,110,111,999,1000,1001,1010,1011,1100,9999]
                 + random.sample(range(1, 10000), 400)))
 pairs_w = [(f, r*10**4) for r in rw for f in forms8(read(r) + '万')]
-ry = sorted(set([1,2,9,10,11,20,90,99,100,101] + random.sample(range(1, RMAX+1), min(400, RMAX))))
+ry_fixed = [x for x in (1,2,9,10,11,20,90,99,100,101) if x <= RMAX]
+ry = sorted(set(ry_fixed + random.sample(range(1, RMAX+1), min(400, RMAX))))
 pairs_y = [(f, r*10**8) for r in ry for f in forms8(read(r) + '亿')]
 for pairs, lab in ((pairs_w, '万级 r×万'), (pairs_y, f'亿级 r×亿 (档内 r≤{RMAX})')):
     pairs = sorted(pairs, key=lambda x: k(x[0]))
@@ -111,3 +105,6 @@ for pairs, lab in ((pairs_w, '万级 r×万'), (pairs_y, f'亿级 r×亿 (档内
     print(f'  {lab}: 值 {len(pos)} / 别名 {len(pairs)} → 违反 {len(bad)}, 隔断 {len(gap)}')
     for a, b in bad[:4]:
         print(f'       ✗ {a[0]}({a[1]}) < {b[0]}({b[1]})')
+    total_err += len(bad) + len(gap)
+if total_err:
+    sys.exit(1)

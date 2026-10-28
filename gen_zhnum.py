@@ -77,8 +77,7 @@ TIER = int(sys.argv[1])
 OUTDIR = sys.argv[2]
 STYLES = 'pure'
 from zhnum_core import (TRUNC_LIMIT, read, u,
-                        D, FIN, FIN_T, TR, TR_T, TRF_, TRFT_,
-                        TRD_, TRDT_, TRU_,
+                        D, FIN, FIN_T, TR, TR_T,
                         alias_closure as _alias_closure)
 
 def alias_closure(s):
@@ -182,9 +181,10 @@ for line in open(ISO_FILE, encoding='utf-8'):
 # 注意: 其中 40 个码点 (U+FA6E/FA6F/U+FADA..U+FAFF) 不在 glibc 的 UTF-8
 # charmap 里, 需配合 gen-charmap.py 生成的补齐版 charmap 才生效 (否则本行被
 # localedef 静默丢弃, 字符回落排到最前).
-for _cp in list(range(0xF900, 0xFB00)) + list(range(0x2F800, 0x2FA1E)):
+for _cp in list(range(0xF900, 0xFB00)) + list(range(0x2F800, 0x2FA20)):
     if _cp not in _compat_cp:
-        compat_rows.append(f'<U{_cp:04X}> <U{_cp:04X}>;IGNORE;IGNORE;IGNORE')
+        _tok = u(chr(_cp))
+        compat_rows.append(f'{_tok} {_tok};IGNORE;IGNORE;IGNORE')
 
 # ---- 数字区 (仅 zhnum) ----
 elems = []              # (元素符号, 定义串)

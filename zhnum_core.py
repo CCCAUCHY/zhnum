@@ -10,12 +10,13 @@ gen_zhnum.py。验证脚本 (alias_spec.py / perf_nau.py) 用正常 import 取�
 TRUNC_LIMIT = 99999   # 截断枚举上限: 万级省零截断形 (四万五千六 类) 枚举到 99990
 
 def u(c):
-    return f'<U{ord(c):04X}>'
+    cp = ord(c)
+    return f'<U{cp:04X}>' if cp <= 0xFFFF else f'<U{cp:08X}>'
 
 def read(n):
     """0..99999999 canonical 读法 (枚举用, 与 verify.py read 同节式语义)"""
-    if n >= 10**8:
-        raise ValueError('read 仅支持 <1e8')
+    if n < 0 or n >= 10**8:
+        raise ValueError('read 仅支持 0 <= n < 1e8')
     if n == 0: return '零'
     s = str(n); units = ['', '十', '百', '千']
     secs = []
@@ -45,15 +46,6 @@ FIN = dict(zip(D, '壹贰叁肆伍陆柒捌玖'))          # 简体大写
 FIN_T = dict(zip(D, '壹貳參肆伍陸柒捌玖'))        # 繁体财务
 TR = str.maketrans('一二三四五六七八九十百千', '壹贰叁肆伍陆柒捌玖拾佰仟')   # 简体大写
 TR_T = str.maketrans('一二三四五六七八九十百千', '壹貳參肆伍陸柒捌玖拾佰仟') # 繁体财务
-# 财务合法形: 数字/单位各类内部大小写统一 —
-# 合法形 = 纯简 s / 纯财务 TRF_(s) / A=数字财务+单位简体 TRD_(s) / B=数字简体+单位财务 TRU_(s);
-# 类内混写 (贰千零三百: 数字混 / 壹千玖佰: 单位混 / 二十萬: 单位混) = 错拼, 一律不注册.
-TRF_ = str.maketrans('一二三四五六七八九十百千万', '壹贰叁肆伍陆柒捌玖拾佰仟萬')   # 纯财务 (含万)
-TRFT_ = str.maketrans('一二三四五六七八九十百千万', '壹貳參肆伍陸柒捌玖拾佰仟萬')
-TRD_ = str.maketrans(D, '壹贰叁肆伍陆柒捌玖')    # A: 只译数字
-TRDT_ = str.maketrans(D, '壹貳參肆伍陸柒捌玖')  # A 繁体
-TRU_ = str.maketrans('十百千万', '拾佰仟萬')      # B: 只译单位
-
 # 别名闭包: 同一数值的全部中文写法。四种风格 —— 全小写 / 全大写 / 小写数字+
 # 大写单位 / 大写数字+小写单位, 每种各带简繁一套。
 # 分类: 十百千 前面有数字时属单位类 (一千 的 千), 否则属数字类 (十万 的 十);
@@ -107,5 +99,3 @@ def alias_closure(s, styles='mixed'):
                 for c, grp in zip(s, g))
         for d, u_ in _order))
 
-def u(c):
-    return f'<U{ord(c):04X}>'
