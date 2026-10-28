@@ -7,11 +7,11 @@ README 讲这个 locale 是什么、怎么用；这里讲**改它的时候要知
 | 文件 | 职责 |
 |------|------|
 | `zhnum_core.py` | 纯逻辑：数字读法 `read()` 与别名闭包 `alias_closure()`。不读文件、不写盘、不看 argv |
-| `gen_zhnum.py` | 读数 → 建槽 → 发射 locale 源。`TIER OUTDIR [pure\|mixed]` |
+| `gen_zhnum.py` | 读数 → 建槽 → 发射 locale 源。`TIER OUTDIR` |
 | `gen-charmap.py` | 从系统 charmap 生成补齐版（原因见下） |
 | `update-unihan.py` | 从 Unihan.zip 重建三张 tsv；按内容比对判「有更新」 |
 | `verify.py` | 排序语义验收，也是周构建的通过门槛 |
-| `build_tiers.sh` / `pack_tiers.sh` | 六份产物的一键构建与打包 |
+| `build_tiers.sh` / `pack_tiers.sh` | 三档产物的一键构建与打包 |
 | `tools/` | 其余检查：`alias_spec.py` 别名完备性、`zb_check.py` 默认排序、`perf_nau.py` 性能、`lint_locale.py` 静态检查、`check_all.sh` 汇总 |
 
 ## 三条不能违反的不变量
@@ -165,8 +165,8 @@ glibc 的 collation 是逐权重的位置比较，没有累加器也没有栈，
 ## 改完必做
 
 ```bash
-python3 gen_zhnum.py 100000000 out/x mixed    # 单份生成
-./build_tiers.sh                              # 六份重建 + 编译 + 打包
+python3 gen_zhnum.py 100000000 out/x          # 单份生成
+./build_tiers.sh                              # 三档重建 + 编译 + 打包
 ./tools/check_all.sh                          # 排序语义 + 别名完备性 + 性能
 python3 tools/lint_locale.py out/ tiers/      # 静态检查
 ```
