@@ -239,7 +239,7 @@ def hundreds(v):
 HUND = {v: hundreds(v) for v in range(110, 1000, 10) if v % 100}
 COEFS = ([(d, FIN[d], i) for i, d in enumerate(D, 1) if i >= 2]          # 二..九
          + [(d, FIN_T[d], i) for i, d in enumerate(D, 1) if i >= 2]
-         + [('十', '拾', 10)]
+         + [('十', '拾', 10), ('一十', '壹拾', 10)]
          + [(d + '十', FIN[d] + '拾', 10 * i) for i, d in enumerate(D[1:], 2)]
          + [(d + '十', FIN_T[d] + '拾', 10 * i) for i, d in enumerate(D[1:], 2)]
          + [('一百', '壹佰', 100)]
@@ -460,6 +460,11 @@ for _x in D:
                 _forms = [_c2] + sorted(_liang_closure(_c2) - {_c2},
                                         key=lambda f: (f.count('两'), f))
                 _forms += alias_closure(_c2)
+                if _t3 == '十' and _b3 == '一':
+                    _c2_short = _x + _u3 + '零十'
+                    _forms += [_c2_short] + sorted(_liang_closure(_c2_short) - {_c2_short},
+                                                   key=lambda f: (f.count('两'), f))
+                    _forms += alias_closure(_c2_short)
                 add(_v3, [elem(f) for f in dict.fromkeys(_forms)])
 
 # ---- 截断枚举: 口语截断形单原子化 (v ≡ 0 mod 10, v ≤ 99990) ----
