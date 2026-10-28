@@ -35,8 +35,8 @@ _N = [str.maketrans(_D + '十百千', _D + '十百千'),
 _UNITS = ('', '十', '百', '千')
 
 
-def _read4(n):
-    """1..9999 的规范读法 (不带万/亿)"""
+def _read4(n, lead=False):
+    """1..9999 的规范读法 (不带万/亿); lead=True 表示前面跨节有零, 10..19 读作 一十X"""
     out, zero = [], False
     for pos in (3, 2, 1, 0):
         d = (n // 10 ** pos) % 10
@@ -47,25 +47,25 @@ def _read4(n):
         if zero:
             out.append('零')
             zero = False
-        if not (d == 1 and pos == 1 and not out):      # 十, 不是 一十
+        if not (d == 1 and pos == 1 and not out and not lead):      # 首节 十, 跨节零后 一十
             out.append(_D[d - 1])
         out.append(_UNITS[pos])
     return ''.join(out)
 
 
-def canon(n):
+def canon(n, lead=False):
     """0..10^16 的规范中文读法 (小写简), 按语言规则, 与生成器无关"""
     if n == 0:
         return '零'
     if n < 10 ** 4:
-        return _read4(n)
+        return _read4(n, lead=lead)
     if n < 10 ** 8:
         q, r = divmod(n, 10 ** 4)
-        return _read4(q) + '万' if r == 0 else \
-            _read4(q) + '万' + (('零' + _read4(r)) if r < 1000 else _read4(r))
+        return _read4(q, lead=lead) + '万' if r == 0 else \
+            _read4(q, lead=lead) + '万' + (('零' + _read4(r, lead=True)) if r < 1000 else _read4(r))
     q, r = divmod(n, 10 ** 8)
-    return canon(q) + '亿' if r == 0 else \
-        canon(q) + '亿' + (('零' + canon(r)) if r < 10 ** 7 else canon(r))
+    return canon(q, lead=lead) + '亿' if r == 0 else \
+        canon(q, lead=lead) + '亿' + (('零' + canon(r, lead=True)) if r < 10 ** 7 else canon(r))
 
 
 def _cls(s):
