@@ -295,20 +295,39 @@ for r, f, v in COEFS:
 # 四形口径同正文: 纯简 / 纯财 / A 数字财+单位简 / B 数字简+单位财; 财务字
 # 另含 贰/貳 叁/參 陆/陸 三对异形, 一并注册 (同值相邻不等值).
 # 单字形 (一..九/十/百/千) 已在上文注册, 此处只收多字形.
+def _liang_closure(s, guards=True):
+    """s 的全部 两 替换子集 (二 后跟 百千万亿, 每处独立).
+    语法守卫: 两不跟十 — 二 的前一字是 十 的替换位不换 (否则产出
+    十两万/二十两万 类非法形; 两十 产不出: 替换位后一字恒为单位).
+    语法守卫: 零后不接两 — 前一字是 零 的替换位也不换 (一百零两万 类
+    非法形).
+    guards=False = 裸幂集 — 供截断枚举用: 省零会删掉 二 前面的 零, 源
+    上下文守卫会误杀合法终形 (二万零二百九十 → 二万两百九 合法), 合法性
+    改由调用点对终形过滤 ('十两'/'零两' 子串)."""
+    _pos = [i for i, c in enumerate(s)
+            if c == '二' and i + 1 < len(s) and s[i+1] in '百千万亿'
+            and not (guards and i and s[i-1] in '十零')]
+    _out = set()
+    for _mask in range(1 << len(_pos)):
+        _t = list(s)
+        for _j, _i in enumerate(_pos):
+            if _mask >> _j & 1:
+                _t[_i] = '两'
+        _out.add(''.join(_t))
+    return _out
+
 for _bv in range(1, 10000):
     _bs = read(_bv)
     _bm = [f for f in alias_closure(_bs) if len(f) >= 2]
     if _bm:
         add(_bv, [elem(f) for f in _bm])
-
-# 整十元素补 两 形: 两百一十..两百九十 (9 元素). 无它时 两百一十 贪心落
-# [两百一](口语 210)+[十], 尾缀是单位权 (十), 大于一切数字权 (九) ⇒
-# 两百一十(210) 排到 二百一十九(219) 之后. 注册整十 两 形后 [两百一十]
-# 单原子, 尾缀回到数字权, 与 二 侧 [二百一十]+数字 同构.
-# 组内序: 同值组尾 (两X/口语形先例 — 注册在财务形之后).
-for _v in sorted(HUND):
-    if HUND[_v].startswith('二百'):
-        add(_v, [elem('两百' + HUND[_v][2:])])
+    # 复合系数补 两 闭包 (两百零二/两百一十二/两千零二/一千两百三十四 等单原子化,
+    # 避免退化多原子后 [两百](200)+[零]+[二] 排在 [二百零一](201) 之前)
+    for _lv in sorted(
+            _liang_closure(_bs) - {_bs},
+            key=lambda f: (f.count('两'), f)):
+        if len(_lv) >= 2:
+            add(_bv, [elem(_lv)])
 # 单位链: 万(1e4) 亿(1e8) 万亿(1e12) 亿亿(1e16) … 万亿亿亿亿(1e36)
 BIG = [('万亿', 12), ('亿亿', 16), ('万亿亿', 20), ('亿亿亿', 24),
        ('万亿亿亿', 28), ('亿亿亿亿', 32), ('万亿亿亿亿', 36)]
@@ -343,26 +362,6 @@ for unit, fin, val in UNIT_CHAIN:
         add(_v * val, [elem(s) for s in alias_closure(_r + unit)])
     # 省"一"简写 (百万/千万/千亿) 不注册 — [百][亿] 首原子 100 夹在系数层
 
-def _liang_closure(s, guards=True):
-    """s 的全部 两 替换子集 (二 后跟 百千万亿, 每处独立).
-    语法守卫: 两不跟十 — 二 的前一字是 十 的替换位不换 (否则产出
-    十两万/二十两万 类非法形; 两十 产不出: 替换位后一字恒为单位).
-    语法守卫: 零后不接两 — 前一字是 零 的替换位也不换 (一百零两万 类
-    非法形).
-    guards=False = 裸幂集 — 供截断枚举用: 省零会删掉 二 前面的 零, 源
-    上下文守卫会误杀合法终形 (二万零二百九十 → 二万两百九 合法), 合法性
-    改由调用点对终形过滤 ('十两'/'零两' 子串)."""
-    _pos = [i for i, c in enumerate(s)
-            if c == '二' and i + 1 < len(s) and s[i+1] in '百千万亿'
-            and not (guards and i and s[i-1] in '十零')]
-    _out = set()
-    for _mask in range(1 << len(_pos)):
-        _t = list(s)
-        for _j, _i in enumerate(_pos):
-            if _mask >> _j & 1:
-                _t[_i] = '两'
-        _out.add(''.join(_t))
-    return _out
 
 # ---- 全量枚举 r×u (档位 ≥ 单位 u: r ≤ TIER//u, 1..9999) ----
 # 完美范围的主体: 非 COEFS 读法 (一百零一/一千二百三十四…) × 单位的化合
