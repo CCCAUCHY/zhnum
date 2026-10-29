@@ -42,7 +42,14 @@ jobs:
           [ "$n" -eq 0 ] && { echo "matrix=[]" >> "$GITHUB_OUTPUT"; exit 0; }
           python3 -c "
           import json
-          print('matrix=' + json.dumps([{'slot': i} for i in range($n)]))" >> "$GITHUB_OUTPUT"
+          # 一半 job 测 main, 一半测 feat/oral-skeleton —— 对比两个分支的抽样结果。
+          # 奇数时 main 多一个。
+          n = $n
+          inc = []
+          for i in range(n):
+              branch = 'main' if i < (n + 1) // 2 else 'feat/oral-skeleton'
+              inc.append({'slot': i, 'branch': branch})
+          print('matrix=' + json.dumps(inc))" >> "$GITHUB_OUTPUT"
 
   sweep:
     needs: plan
@@ -62,6 +69,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
         with:
+          ref: ${{ matrix.branch }}
           fetch-depth: 1
       - name: 记 job 起点（后面算剩余预算用）
         run: echo "JOB_START=$(date +%s)" >> "$GITHUB_ENV"
@@ -71,19 +79,17 @@ jobs:
           sudo apt-get install -y -qq locales libglib2.0-0   # sweep 用 ctypes 直调 libglib, 不需要 python3-gi
       - name: 生成补齐版 charmap
         run: python3 gen-charmap.py charmaps
-      - name: 编译三个版本的 locale（整个 job 只编这一次）
+      - name: 从源码生成并编译三个版本（整个 job 只编这一次）
         run: |
           set -e
           CH="$GITHUB_WORKSPACE/charmaps/UTF-8"
-          PAIRS="亿 万亿 亿亿"
+          # 不用 tiers/ 里的预构建产物 —— 那样测的是 main 的产物, 而不是
+          # 本分支的。这里从源码生成 (几秒) 再编译 (每档约 1 分钟)。
           pids=""
-          for p in $PAIRS; do
-            D="locroot/$p-pure"; mkdir -p "$D"
-            tar -xzf "tiers/$p.tar.gz" -C "$D"
-            cp tiers/zhbase "$D/"            # copy "zhbase" 要的是**源文件**:
-                                             # runner 的 glibc 2.39 不会去用同目录
-                                             # 下已编译的 zhbase.UTF-8 (本机新版
-                                             # glibc 会, 所以本地测不出这个差异)
+          for pair in "100000000 亿" "1000000000000 万亿" "10000000000000000 亿亿"; do
+            set -- $pair
+            D="locroot/$2-pure"; mkdir -p "$D"
+            python3 gen_zhnum.py "$1" "$D" > /dev/null
             (
               cd "$D"
               LC_ALL=C localedef -f "$CH" -i "$PWD/zhbase" ./zhbase.UTF-8
@@ -109,8 +115,15 @@ jobs:
           BUDGET=$(( 18000 - ($(date +%s) - JOB_START) ))     # 5 小时减去已用
           [ "$BUDGET" -gt 600 ] || { echo "::error::留给抽样的时间不足 ($BUDGET s)"; exit 1; }
           echo "槽 $R: 抽样预算 $(( BUDGET / 60 )) 分, 三条 lane (每条单进程)"
+          # 只有 main 分支的 job 提交报告 —— 骨架分支的 job 检出的是
+          # feat/oral-skeleton, commit_round 里的 reset --mixed origin/main
+          # 会把它的代码重置掉。骨架分支的结果留在 job 日志里。
+          COMMIT=""
+          [ "${{ matrix.branch }}" = "main" ] && COMMIT="--commit"
           python3 tools/sweep_drive.py \
             --budget "$BUDGET" --round-max 1000000 --workers 1 \
             --lanes 亿:pure,万亿:pure,亿亿:pure \
             --loc-root "$PWD/locroot" \
-            --report-dir reports --run-id "$GITHUB_RUN_NUMBER-$R" --commit
+            --report-dir reports \
+            --run-id "$GITHUB_RUN_NUMBER-$R-$(echo '${{ matrix.branch }}' | tr '/' '-')" \
+            $COMMIT
