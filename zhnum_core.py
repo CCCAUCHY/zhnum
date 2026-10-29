@@ -10,7 +10,11 @@ gen_zhnum.py。验证脚本 (alias_spec.py / perf_nau.py) 用正常 import 取�
 TRUNC_LIMIT = 99999   # 截断枚举上限: 万级省零截断形 (四万五千六 类) 枚举到 99990
 
 def u(c):
-    return f'<U{ord(c):04X}>'
+    """码点记号。BMP 用 4 位, 补充平面必须 8 位 —— glibc 基表与 charmap
+    都是这么写的 (<U0002F801>); 用 :04X 会把 0x2F801 截成 <U2F801>, 那是
+    另一个码点, localedef 静默丢弃该行, 这些兼容汉字回落排到最前。"""
+    cp = ord(c)
+    return f'<U{cp:04X}>' if cp <= 0xFFFF else f'<U{cp:08X}>'
 
 def read(n):
     """0..99999999 canonical 读法 (枚举用, 与 verify.py read 同节式语义)"""
@@ -107,5 +111,3 @@ def alias_closure(s, styles='mixed'):
                 for c, grp in zip(s, g))
         for d, u_ in _order))
 
-def u(c):
-    return f'<U{ord(c):04X}>'

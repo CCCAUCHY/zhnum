@@ -166,12 +166,19 @@ for line in open(ISO_FILE, encoding='utf-8'):
     if tok in _seen_tok:
         continue
     _seen_tok.add(tok)
-    row = f'{tok} {tok};IGNORE;IGNORE;IGNORE'
+    # 兼容汉字**保留基表的原权重** (<BASE>;<MIN> 之类)。旧版把它们和脚本行
+    # 一样重写成 IGNORE;IGNORE;IGNORE, 于是基表里本来正常的兼容汉字 (如
+    # U+FAD4) 在编译后失去权重、回落成 IGNORE 排到最前 —— 实测 FAD0..FAD7
+    # 全部如此。脚本行仍写 IGNORE (它们靠 reorder 定位, 不需要自身权重)。
+    # 基表行形如 `<Uxxxx> "<键>";<w1>;<w2>;<w3> % 注释`: 按 ';' 切开后
+    # [0]=码点+键, [1..3]=三级权重, [3] 尾部带 ' % 注释'。
+    _w = line.split(';')
+    _weights = ';'.join(x.split(' %')[0].strip() for x in _w[1:4])
     if 0xF900 <= cp <= 0xFAFF or 0x2F800 <= cp <= 0x2FA1F:
-        compat_rows.append(row)
+        compat_rows.append(f'{tok} {tok};{_weights}')
         _compat_cp.add(cp)
     else:
-        script_rows.append(row)
+        script_rows.append(f'{tok} {tok};IGNORE;IGNORE;IGNORE')
 
 # 兼容汉字补齐: 基表未收录的码点 (Unicode 后期新增的兼容汉字, 如 U+FA6E/
 # U+FA6F/U+FADA..U+FAFF, 以及 2F800 段的两点) 在基表里既无单字行也无区间
@@ -182,9 +189,10 @@ for line in open(ISO_FILE, encoding='utf-8'):
 # 注意: 其中 40 个码点 (U+FA6E/FA6F/U+FADA..U+FAFF) 不在 glibc 的 UTF-8
 # charmap 里, 需配合 gen-charmap.py 生成的补齐版 charmap 才生效 (否则本行被
 # localedef 静默丢弃, 字符回落排到最前).
-for _cp in list(range(0xF900, 0xFB00)) + list(range(0x2F800, 0x2FA1E)):
+for _cp in list(range(0xF900, 0xFB00)) + list(range(0x2F800, 0x2FA20)):
     if _cp not in _compat_cp:
-        compat_rows.append(f'<U{_cp:04X}> <U{_cp:04X}>;IGNORE;IGNORE;IGNORE')
+        _t = u(chr(_cp))
+        compat_rows.append(f'{_t} {_t};IGNORE;IGNORE;IGNORE')
 
 # ---- 数字区 (仅 zhnum) ----
 elems = []              # (元素符号, 定义串)
@@ -218,13 +226,14 @@ def tok_of(sp):
 add(0, ['零', '〇'])
 for i, d in enumerate(D, 1):
     add(i, [d, FIN[d], FIN_T[d]])
-# 两 = 2 (同值组尾: 二 < 贰 < 两); 十/百/千 系数一处全形有序注册,
-#   组内序 = 分财务数字和财务单位, 非财务一堆、财务一堆、混搭一堆,
-#   简体在前; ∅ 财务形 拾/佰/仟 居财务堆中, 壹十 之后、壹拾 之前:
-#   十 < 一十 < 壹十 < 拾 < 壹拾 < 一拾
-add(10, ['十'] + E('一十') + E('壹十') + ['拾'] + E('壹拾') + E('一拾'))
-add(100, ['百'] + E('一百') + E('壹百') + ['佰'] + E('壹佰') + E('一佰'))
-add(1000, ['千'] + E('一千') + E('壹千') + ['仟'] + E('壹仟') + E('一仟'))
+# 两 = 2 (同值组尾: 二 < 贰 < 两)。
+# 十/百/千 的写法**只列契约内的**: 纯小写 (十/百/千)、带一 (一十)、
+# 全大写 (拾/壹拾/貳拾...)。旧版还列了 壹十 / 一拾 这类大小写混搭 ——
+# 混搭非法 (没人简繁混用、财务大小写混搭也不正规), 不在契约内, 不建槽。
+# 跨类 (简体 vs 财务 vs 繁体) 的相对顺序不保证, 只保证同类内序。
+add(10, ['十'] + E('一十') + ['拾'] + E('壹拾'))
+add(100, ['百'] + E('一百') + ['佰'] + E('壹佰'))
+add(1000, ['千'] + E('一千') + ['仟'] + E('壹仟'))
 
 # 系数读法 (值 2..9999): 数字 2..9、十、X十、一百、X百、一千、X千、整十带百
 def hundreds(v):
@@ -239,7 +248,7 @@ def hundreds(v):
 HUND = {v: hundreds(v) for v in range(110, 1000, 10) if v % 100}
 COEFS = ([(d, FIN[d], i) for i, d in enumerate(D, 1) if i >= 2]          # 二..九
          + [(d, FIN_T[d], i) for i, d in enumerate(D, 1) if i >= 2]
-         + [('十', '拾', 10)]
+         + [('十', '拾', 10), ('一十', '壹拾', 10)]
          + [(d + '十', FIN[d] + '拾', 10 * i) for i, d in enumerate(D[1:], 2)]
          + [(d + '十', FIN_T[d] + '拾', 10 * i) for i, d in enumerate(D[1:], 2)]
          + [('一百', '壹佰', 100)]
@@ -267,21 +276,11 @@ for t in range(1, 10):
             if t2 != f.translate(TR):            # 贰叁陆 外同形, 去重防双权重行
                 TWO.append((f, t2, v))
 COEFS += TWO
-# 十/百/千 全形有序注册: 万/亿 链注册数字×单位全部组合 (二万/贰萬/贰万/二萬),
-# 十/百/千 系数补全矩阵缺角, 组内序按 "分财务数字和财务单位, 非财务一堆,
-# 财务一堆, 混搭一堆, 简体在前":
-#   二十 < 贰十 < 贰拾 < 貳拾 < 二拾 < 貳十
-# 即 X+U < FIN[X]+U < FIN[X]+FIN[U] < FIN_T[X]+FIN[U] < X+FIN[U] < FIN_T[X]+U
-# (FIN_T==FIN 的数字同形自动合并). 混搭形与纯对**交错**注册 ⇒ 本块在独立
-# 原子循环之前 (首现定序; 循环对纯对的重复注册由 emit 按 token 去重).
-# X=一 组 (壹十 = FIN[一]+U) 已在系数一处全形注册, 此处 X∈二..九.
-# 不补: 两佰/两仟 (两 只入数值区与 两X 形), 混搭×万/亿 乘积 (二仟万, 错拼
-# 同类), TWO/HUND 部分翻译形 (十玖/二百伍拾, 同属错拼).
-for _us, _uf, _uv in (('十', '拾', 10), ('百', '佰', 100), ('千', '仟', 1000)):
-    for _i, _d in enumerate(D[1:], 2):
-        _forms = [_d + _us, FIN[_d] + _us, FIN[_d] + _uf,
-                  FIN_T[_d] + _uf, _d + _uf, FIN_T[_d] + _us]
-        add(_i * _uv, [elem(s) for s in dict.fromkeys(_forms)])
+# X十/X百/X千 的纯写法由下面的 COEFS 循环经 alias_closure 注册 —— 这里不再
+# 手写写法表。旧版列了 6 个形 (二十/贰十/贰拾/貳拾/二拾/貳十), 其中三个是
+# 大小写混搭 (贰十/二拾/貳十)。混搭不在契约内 (没人简繁混用、财务大小写
+# 混搭也不正规), 为它们建槽并维护组内序纯属复杂度: 同类内序正确、跨类顺序
+# 不保证即可, 就像兼容错字。
 # 独立原子: X十/X百/X千/整十带百 (二百人/三千章 等短语首段; 十/百/千 纯对
 # 已在上块交错注册, 此处的重复注册被 emit 去重 — 本循环承载 HUND/TWO 纯对)
 for r, f, v in COEFS:
@@ -380,6 +379,12 @@ if TIER:
         for _r in range(1, _rmax + 1):
             _s = read(_r)
             _fs = alias_closure(_s + _eu)
+            # 十位是 一 的系数还要收省 一 的形 (一十万 / 壹拾万 / 一十亿):
+            # 规范读法是 一十万, 但 十万 同样常见且已作为 [十][万] 注册;
+            # 不注册 一十万 会让它退化成 [一十][万] 两原子, 首原子 10 的槽
+            # 排在 十一 之前 ⇒ 一十万 排在 十一 之前 (实测逆序).
+            if _s.startswith('一十'):
+                _fs += alias_closure(_s[1:] + _eu)
             add(_r * _ev, [elem(f) for f in _fs])
             # 闭包在 化合物 read(r)+u 上 (非 read(r)): r 末位 二 拼上
             # 单位才可换 (一千零两万); 序同省零/带零化合物的 两 闭包
@@ -460,6 +465,15 @@ for _x in D:
                 _forms = [_c2] + sorted(_liang_closure(_c2) - {_c2},
                                         key=lambda f: (f.count('两'), f))
                 _forms += alias_closure(_c2)
+                # 十位是 一 时还要收省 一 的形 (一万零十 / 一万零壹拾):
+                # 规范读法是 一万零一十, 但 一万零十 同样常见, 不注册会退化成
+                # [一万][零][十] 三原子, 首原子 10000 让 一万零十一 排到
+                # 一万零一十 之前 (实测逆序).
+                if _t3 == '十' and _b3 == '一':
+                    _short = _x + _u3 + '零十'
+                    _forms += [_short] + sorted(_liang_closure(_short) - {_short},
+                                                key=lambda f: (f.count('两'), f))
+                    _forms += alias_closure(_short)
                 add(_v3, [elem(f) for f in dict.fromkeys(_forms)])
 
 # ---- 截断枚举: 口语截断形单原子化 (v ≡ 0 mod 10, v ≤ 99990) ----
@@ -549,7 +563,7 @@ def emit_lines():
                 seen.add(tok)          # 共享行也标记 — 同 token 二次出现勿重发
             else:
                 w(tok)
-            order.append(sp if len(sp) <= 1 else ELEM_TEXT[sp])
+            order.append((val, sp if len(sp) <= 1 else ELEM_TEXT[sp]))
     return lines, order
 
 lines, slot_order = emit_lines()
@@ -603,7 +617,18 @@ def build(header, copy_src, collate_rows, elems_list):
              '']
     return file
 
-hanzi_rows = [h[4] for h in all_rows] + compat_rows + script_rows
+# compat_rows 由两段拼成: 基表已有的兼容汉字 (基表序) + 补齐段 (按区段枚举).
+# 两段的码点范围交错 (补齐段含 0xF900 段, 基表段含 0x2F800 段) ⇒ 直接拼接会
+# 让码点序倒退. glibc 的 order_start 表要求元素按码点递增, 倒退会让 localedef
+# **跳过**后面的行 (实测: <U0002F93F> 后接 <UFAD3> 再接 <U0002F949>, 中间的
+# FAD3/FAD4 全部回落 IGNORE). 所以输出前按码点排序.
+def sort_compat(rows):
+    def cp_of(row):
+        m = re.match(r'<U([0-9A-F]+)>', row)
+        return int(m.group(1), 16) if m else 0
+    return sorted(rows, key=cp_of)
+
+hanzi_rows = [h[4] for h in all_rows] + sort_compat(compat_rows) + script_rows
 f_zhbase = build(
     # 顺序要紧: escape_char 必须先于 comment_char。实测两行都声明时, 顺序写反
     # 会让 localedef 编出的 LC_COLLATE 膨胀 2.4 倍 (28.7 MB → 68.6 MB); 单独
@@ -636,10 +661,12 @@ f_zhnum = build(
     'zhbase', lines, elems)
 open(OUT_ZHNUM, 'w', encoding='utf-8').write('\n'.join(f_zhnum))
 
-# 副产物: 槽发射序 (verify 同值不等值检查基准)
+# 副产物: 槽发射序 —— 每行 `值<TAB>写法`, 顺序即注册序 (同值写法相邻)。
+# 这是检查器的**权威来源**: 检查器不该自己推"哪些写法合法", 直接读这里,
+# 才能避免"检查器和生成器各读各的" (一十万 的错序就是这样躲过抽样的)。
 with open(f'{OUTDIR}/slot-order.tsv', 'w', encoding='utf-8') as f:
-    for sp in slot_order:
-        f.write(sp + '\n')
+    for val, sp in slot_order:
+        f.write(f'{val}\t{sp}\n')
 
 print(f'zhbase : 汉字 {len(all_rows)}, 兼容汉字 {len(compat_rows)}, '
       f'脚本 {len(script_rows)}, 共 {len(f_zhbase)} 行')
