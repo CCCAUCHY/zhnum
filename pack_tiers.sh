@@ -34,10 +34,8 @@ mkdir -p tiers
 cp "$REF" tiers/zhbase
 for t in 亿 万亿 亿亿; do
   d="out/$t"
-  # slot-order.tsv 一起打包: numcheck 用它当"有哪些写法"的权威来源。
-  # 它只是检查用的副产物 (0.6 MB 压缩后), 用户不需要, 解包后可删。
   tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner \
-      -czf "tiers/$t.tar.gz" -C "$d" zhnum slot-order.tsv
+      -czf "tiers/$t.tar.gz" -C "$d" zhnum
   printf '  %-8s %s\n' "$t" "$(du -h "tiers/$t.tar.gz" | cut -f1)"
 done
 echo "  zhbase    $(du -h tiers/zhbase | cut -f1)  (三份共用)"

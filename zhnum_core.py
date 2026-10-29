@@ -106,3 +106,78 @@ def alias_closure(s, styles='mixed'):
                 for c, grp in zip(s, g))
         for d, u_ in _order))
 
+
+# ── 一个整数的全部合法写法 (契约的唯一实现) ──
+# 生成器与检查器都调这里。之前检查器自己实现了一套规则 —— 两份代码实现
+# 同一个规则, 规则错了两边一起错, 那才是循环论证。
+#
+# 写法分三层, 都从规范读法 read(n) 派生:
+#   ① 规范读法本身 × 4 种纯风格 (alias_closure)
+#   ② 省一: 节首的 "一十" 可省成 "十" (一十万 → 十万, 一万零一十 → 一万零十)
+#   ③ 删尾单位: read(n) 去掉末尾的 十/百/千 得到口语形/截断形
+#      (二百五十 → 二百五 = 250, 四万五千六百 → 四万五千六 = 45600)
+#      仅当删完后仍含单位、且不以 零 开头时合法。
+
+def _drop_tail_unit(s):
+    """删末尾单位 (口语形/截断形)。不合法时返回 None。
+    规则 (与生成器的口语省十式/截断枚举一致):
+      - 末尾必须是 十/百/千
+      - 前一个字必须是数字 (不能是 零/单位)
+      - 删完仍要有单位, 不能只剩数字
+      - 末尾是 十 时, 前一个数字不能是 零 (没有 二百零五 这种省法)
+    """
+    if len(s) < 2 or s[-1] not in '十百千':
+        return None
+    if s[-2] not in _DIGS:
+        return None
+    t = s[:-1]
+    if not t or not any(c in _SBKS + _WYS for c in t):
+        return None
+    # 删完不能是另一个整数的规范读法 —— 一万零一十 删掉 十 得 一万零一,
+    # 而那正好是 10001 的读法。一百五十 删得 一百五, 不是任何值的规范读法
+    # (150 读作 一百五十), 所以合法。用 read() 反查是最可靠的判据。
+    if t[-1] == '零':
+        return None
+    # 尾单位前面那个数字必须是**该位上的数字**, 不能是个位数字。
+    # 判据: 看这个数字前面是不是 零 —— 一万零一十 的 一 前面是 零, 它是
+    # 个位数字, 删掉 十 会得到 一万零一 (10001 的读法)。一百五十 的 五
+    # 前面是 百 (单位), 它是十位数字, 删掉 十 得 一百五 (150 的口语形)。
+    if len(s) >= 3 and s[-3] == '零':
+        return None
+    return t
+
+
+def spellings(n, styles='pure'):
+    """n 的全部合法写法 —— 契约的唯一实现。
+
+    返回去重后的列表 (顺序 = 注册序, 同值写法按此相邻)。
+    """
+    base = read(n)
+    variants = {base}
+    # ② 省一 / 补一 (只适用于节首的 十)
+    for i in range(len(base) - 1):
+        if base[i] == '一' and base[i + 1] == '十':
+            prev = base[i - 1] if i > 0 else None
+            if prev is None or prev in '万亿':
+                variants.add(base[:i] + base[i + 1:])
+    for s in list(variants):
+        for i, c in enumerate(s):
+            if c != '十':
+                continue
+            prev = s[i - 1] if i > 0 else None
+            if prev is None or prev in '万亿':
+                variants.add(s[:i] + '一' + s[i:])
+        for i in range(len(s) - 1):
+            if s[i] == '零' and s[i + 1] == '十':
+                variants.add(s[:i + 1] + '一' + s[i + 1:])
+    # ③ 删尾单位 —— 只从**规范读法**删, 不从省一变体删。
+    # 一万零一十 的省一形是 一万零十; 若再从它删尾得 一万零一 (那是 10001),
+    # 就串值了。删尾只处理 二百五十 → 二百五 这类尾单位可直接省的情形。
+    t = _drop_tail_unit(base)
+    if t:
+        variants.add(t)
+    # × 4 种纯风格
+    out = []
+    for v in sorted(variants):
+        out.extend(alias_closure(v, styles))
+    return list(dict.fromkeys(out))

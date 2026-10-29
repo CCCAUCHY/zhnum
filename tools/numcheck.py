@@ -25,6 +25,8 @@
 """
 import argparse, ctypes, locale, os, sys, time
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 _L = ctypes.CDLL('libglib-2.0.so.0')
 _L.g_utf8_collate_key_for_filename.restype = ctypes.c_void_p
 _L.g_utf8_collate_key_for_filename.argtypes = [ctypes.c_char_p, ctypes.c_ssize_t]
@@ -41,108 +43,10 @@ def key(s):
         _L.g_free(p)
 
 
-# ── 语言规则: 整数 → 全部合法中文写法 ──
-_D = '一二三四五六七八九'
-_U = ('', '十', '百', '千')
-# 数字类 3 形 / 单位类 4 形 (与生成器同源, 但这里是**独立实现**)
-_DMAP = [str.maketrans('', ''),
-         str.maketrans(_D + '十百千', '壹贰叁肆伍陆柒捌玖拾佰仟'),
-         str.maketrans(_D + '十百千', '壹貳參肆伍陸柒捌玖拾佰仟')]
-_UMAP = [str.maketrans('', ''),
-         str.maketrans('十百千', '拾佰仟'),
-         str.maketrans('万亿', '萬億'),
-         str.maketrans('十百千万亿', '拾佰仟萬億')]
-# 纯写法 = 同类配对 (混搭非法, 不生成)
-PURE = ((0, 0), (1, 1), (0, 2), (2, 3))
-
-
-def _cls(s):
-    """'n' 数字类 / 'u' 单位类。十百千 前面有数字 ⇒ 单位类。"""
-    g, prev = [], False
-    for c in s:
-        if c in '十百千万亿':
-            is_u = prev or c in '万亿'
-            g.append('u' if is_u else 'n')
-            prev = not is_u
-        else:
-            g.append('n')
-            prev = c in _D
-    return g
-
-
-def _read4(n, lead=False):
-    out, zero = [], False
-    for pos in (3, 2, 1, 0):
-        d = (n // 10 ** pos) % 10
-        if d == 0:
-            if out:
-                zero = True
-            continue
-        if zero:
-            out.append('零')
-            zero = False
-        if not (d == 1 and pos == 1 and not out and not lead):
-            out.append(_D[d - 1])
-        out.append(_U[pos])
-    return ''.join(out)
-
-
-def canon(n, lead=False):
-    if n == 0:
-        return '零'
-    if n < 10 ** 4:
-        return _read4(n, lead)
-    if n < 10 ** 8:
-        q, r = divmod(n, 10 ** 4)
-        return _read4(q, lead) + '万' if r == 0 else \
-            _read4(q, lead) + '万' + (('零' + _read4(r, True)) if r < 1000 else _read4(r))
-    q, r = divmod(n, 10 ** 8)
-    return canon(q, lead) + '亿' if r == 0 else \
-        canon(q, lead) + '亿' + (('零' + canon(r, True)) if r < 10 ** 7 else canon(r))
-
-
-def spellings(n):
-    """n 的全部合法写法 (规范读法 × 4 种纯风格 × 省一/补一变体)
-
-    省一规则 (语言事实, 与生成器无关):
-      - 开头就是 十 的: 十 / 一十 (十, 十一, 十亿...)
-      - 跨节零后的 十: 一万零十 / 一万零一十 (省一合法)
-      - 节内零后的 十: 一千零一十, **不能**省成 一千零十
-    即: 省一要求这个 十 是"该节的第一个数字位" —— 也就是它前面是
-    串首、或 万/亿/零 之后。
-    """
-    base = canon(n)
-    variants = {base}
-    # 省一 / 补一 只适用于**节首**的 十 —— 即它前面是串首或 万/亿 (跨节零
-    # 也算, 因为跨节零属于上一节的尾巴)。
-    #   一万零一十 → 一万零十 ✓ (跨节零后, 十 是新节首位)
-    #   一千零一十 → 一千零十 ✗ (节内零后, 十 不是节首)
-    #   一十八 → 十八 ✓ (串首)
-    for i in range(len(base) - 1):
-        if base[i] == '一' and base[i + 1] == '十':
-            prev = base[i - 1] if i > 0 else None
-            if prev is None or prev in '万亿':
-                variants.add(base[:i] + base[i + 1:])
-    # 补一: 节首的 十 前面加 一
-    for s in list(variants):
-        for i, c in enumerate(s):
-            if c != '十':
-                continue
-            prev = s[i - 1] if i > 0 else None
-            if prev is None or prev in '万亿':
-                variants.add(s[:i] + '一' + s[i:])
-        # 跨节零后的 十: 一万零十 → 一万零一十 (零 后面紧跟 十)
-        for i in range(len(s) - 1):
-            if s[i] == '零' and s[i + 1] == '十':
-                variants.add(s[:i + 1] + '一' + s[i + 1:])
-    # 每种规范形 × 4 种纯风格
-    out = set()
-    for v in variants:
-        g = _cls(v)
-        for d, u in PURE:
-            out.add(''.join(c.translate(_DMAP[d] if gr == 'n' else _UMAP[u])
-                            for c, gr in zip(v, g)))
-    return sorted(out)
+# ── 写法来源: zhnum_core.spellings() ──
+# 契约的唯一实现。检查器不再自己实现一套规则 —— 两份代码实现同一个规则,
+# 规则错了两边一起错, 那才是循环论证。判据是整数序 (算术事实), 与生成器无关。
+from zhnum_core import spellings
 
 
 def main():

@@ -500,16 +500,18 @@ for _v in range(10, TRUNC_LIMIT + 1, 10):
         continue
     if len(_r) >= 3 and _r[-3] == '零':
         continue
-    _forms = []
+    # 规范读法本身也要注册 —— 旧版只注册截断形 (_t0), 于是 10110 这种
+    # 不是 r×u 形式的值只有 一万零一百一 (口语形), 规范读法 一万零一百一十
+    # 漏注册, 整串退化成多原子。实测 28.7% 的注册值缺规范读法。
+    _forms = [alias_closure(_r)]           # ① 规范读法
     for _full in sorted(_liang_closure(_r, guards=False),
                         key=lambda f: (f.count('两'), f)):
         _t0 = _full[:-1]
         for _f in dict.fromkeys([_t0, _t0.replace('零', '')]):
             if (_f and any(_c in _f for _c in '十百千万亿')
                     and '十两' not in _f and '零两' not in _f):
-                _forms.append(_f)
-    add(_v, [elem(x) for x in dict.fromkeys(
-        f for _f in _forms for f in alias_closure(_f))])
+                _forms.append(alias_closure(_f))   # ② 截断形
+    add(_v, [elem(x) for x in dict.fromkeys(f for fs in _forms for f in fs)])
 
 # 序数括号组: (上/前) < (中) < (下/后), 槽值 0.1/0.2/0.3 落在 零 与 一
 # 之间; 全角/半角、圆/方括号同槽
