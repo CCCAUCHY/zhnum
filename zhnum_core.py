@@ -176,8 +176,76 @@ def spellings(n, styles='pure'):
     t = _drop_tail_unit(base)
     if t:
         variants.add(t)
+    # ④a 省零: 删掉一个 零 (一万零一百 → 一万一百 = 10100, 一千零二十 →
+    #     一千二十 = 1020)。守卫:
+    #       - 删完不能以 零 开头/结尾, 不能有连续 零
+    #       - **零 后面必须还跟着单位**: 一千零一 删零得 一千一, 但 一千一 是
+    #         1100 的省写 (一千一百 的省), 不是 1001 ⇒ 不合法。
+    #         一万零一百 删零得 一万一百, 一百 有单位 ⇒ 合法。
+    for v in list(variants):
+        for i, c in enumerate(v):
+            if c != '零':
+                continue
+            rest = v[i + 1:]
+            if not rest or not any(u in rest for u in '十百千万亿'):
+                continue
+            t = v[:i] + rest
+            if not t or t[0] == '零' or t[-1] == '零' or '零零' in t:
+                continue
+            variants.add(t)
+    # ④a2 零十 → 零一十 的省一: 一千零一十 → 一千零十 (1010)
+    #     与"节首省一"不同, 这是节内零后的 十 也可省 一
+    for v in list(variants):
+        for i in range(len(v) - 2):
+            if v[i] == '零' and v[i+1] == '一' and v[i+2] == '十':
+                variants.add(v[:i+1] + v[i+2:])
+    # ④ 两 替换: 二 后跟 百/千/万/亿 时可换成 两 (两不跟十)
+    #    语法守卫: 两 不跟 十; 零 后不接 两 (一百零两万 非法)
+    #    迭代到不动点 —— 两千两 (2200) 需要两次替换:
+    #    二千二百 → 两千二百 → 两千两。
+    liang = set()
+    _work = set(variants)
+    while True:
+        _new = set()
+        for v in _work:
+            pos = [i for i, c in enumerate(v)
+                   if c == '二' and i + 1 < len(v) and v[i + 1] in '百千万亿'
+                   and not (i > 0 and v[i - 1] in '十零')]
+            if v.endswith('二百') and len(v) > 2:
+                _new.add(v[:-2] + '两')
+            if v.endswith('二千') and len(v) > 2:
+                _new.add(v[:-2] + '两')
+            for mask in range(1 << len(pos)):
+                t = list(v)
+                for j, i in enumerate(pos):
+                    if mask >> j & 1:
+                        t[i] = '两'
+                _new.add(''.join(t))
+        _new -= _work
+        if not _new:
+            break
+        liang |= _new
+        _work |= _new
+    # ④b 两 本身 = 2 (数量词, 不参与 二 的替换规则)
+    if n == 2:
+        liang.add('两')
+    # ⑤ 单位独用形: 十/百/千 可单写 (百 = 一百), 万/亿 亦然
+    units = set()
+    for v in list(variants) + list(liang):
+        if v == '一百':
+            units.update(['百', '佰'])
+        elif v == '一千':
+            units.update(['千', '仟'])
+        elif v == '一十':
+            units.update(['十', '拾'])
+        elif v == '一万':
+            units.update(['万', '萬'])
+        elif v == '一亿':
+            units.update(['亿', '億'])
     # × 4 种纯风格
     out = []
-    for v in sorted(variants):
+    for v in sorted(variants | liang | units):
         out.extend(alias_closure(v, styles))
+    # 两 本身 (值 2) 与 两X 的财务/繁体形不走 alias_closure (两 不在 _DIGS)
+    out.extend(sorted(liang))
     return list(dict.fromkeys(out))
