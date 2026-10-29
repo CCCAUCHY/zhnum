@@ -157,6 +157,9 @@ def main():
                     help='随机取值 (大范围用); 默认连续')
     ap.add_argument('--seed', type=int, default=0)
     ap.add_argument('--case', default='bare', choices=['bare', 'chapter'])
+    ap.add_argument('--slots', default='',
+                    help='slot-order.tsv: 用它提供"每个值有哪些写法"（契约）。'
+                         '不给则用内置的语言规则生成 4 形。')
     ap.add_argument('--report', default='', help='记录写到这个文件 (JSON)')
     ap.add_argument('--workers', type=int, default=1, help='保留参数, 供 sweep_drive 兼容')
     a = ap.parse_args()
@@ -174,22 +177,52 @@ def main():
 
     pre, suf = ('', '.txt') if a.case == 'bare' else ('第', '章.txt')
 
+    # 写法来源: 有 slot-order.tsv 就用它（= 生成器注册的, 即契约本身）,
+    # 否则用内置语言规则。前者能覆盖口语形/截断形等, 后者只有 4 形。
+    by_val = None
+    if a.slots:
+        by_val = {}
+        for ln in open(a.slots, encoding='utf-8'):
+            if '\t' not in ln:
+                continue
+            v, sp = ln.rstrip('\n').split('\t', 1)
+            try:
+                by_val.setdefault(float(v), []).append(sp)
+            except ValueError:
+                continue
+        print(f'写法来自 {a.slots}: {len(by_val):,} 个值 / '
+              f'{sum(len(x) for x in by_val.values()):,} 条写法', flush=True)
+
     if a.random:
         import random
         hi = a.end or (a.start + a.count)
         rng = random.Random(a.seed)
         # 去重: 相邻两个值相同时 "本值键 > 前值键" 必然不成立 (有放回抽样
         # 必然出现重复, 见 NOTES)
-        vals = sorted(set(rng.randrange(a.start, hi + 1) for _ in range(a.count)))
-        print(f'随机 [{a.start:,}, {hi:,}] 抽 {len(vals):,} 个 情形 {a.case}', flush=True)
+        if by_val is not None:
+            # 从注册过的值里挑 —— 保证每个抽到的值都有写法可查
+            pool = [v for v in by_val if a.start <= v <= hi and v == int(v)]
+            vals = sorted(rng.sample(pool, min(a.count, len(pool))))
+            print(f'随机 [{a.start:,}, {hi:,}] 从 {len(pool):,} 个注册值中'
+                  f'抽 {len(vals):,} 个 情形 {a.case}', flush=True)
+        else:
+            vals = sorted(set(rng.randrange(a.start, hi + 1) for _ in range(a.count)))
+            print(f'随机 [{a.start:,}, {hi:,}] 抽 {len(vals):,} 个 情形 {a.case}', flush=True)
     else:
         hi = a.start + a.count
         vals = list(range(a.start, hi))
         print(f'连续 [{a.start:,}, {hi:,}) 共 {len(vals):,} 个 情形 {a.case}', flush=True)
 
-    # 1. 整数序 (真值) —— 同时生成全部写法
+    # 1. 整数序 (真值) —— 同时取全部写法
     t0 = time.time()
-    items = [(v, spellings(v)) for v in vals]
+    if by_val is not None:
+        items = [(v, by_val[v]) for v in vals if v in by_val]
+        missing = len(vals) - len(items)
+        if missing:
+            print(f'  注意: {missing} 个值在 slot-order.tsv 里没有写法 (超出注册范围?)',
+                  flush=True)
+    else:
+        items = [(v, spellings(v)) for v in vals]
 
     # 2. locale 序
     bad = 0
