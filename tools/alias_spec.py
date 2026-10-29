@@ -10,7 +10,7 @@
 """
 import sys, os, random, collections
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from zhnum_core import read, D
+from zhnum_core import read
 
 DIG = '一二三四五六七八九'
 SBK = '十百千'
@@ -25,7 +25,6 @@ _DMAP = [
 # (萬 是繁体字不是财务字 ⇒ 简体全大写是 壹佰万, 繁体全大写是 壹佰萬)
 # 风格组合: 同级配对两种 (全小写/全大写), 各带简繁 —— 混搭已废弃
 _PURE = ((0, 0), (1, 1), (0, 2), (2, 3))
-_MIXED = tuple((d, u) for d in range(3) for u in range(4))
 _STYLES = _PURE          # 混搭已废弃, 只查纯写法
 _UMAP = [
     str.maketrans('', ''),
@@ -48,12 +47,6 @@ def classify(s):
 
 def forms8(s):
     g = classify(s)
-    out = []
-    for dm in _DMAP:
-        for um in _UMAP:
-            out.append(''.join((dm if grp == 'd' else um).get(c, c)
-                               if False else c for c, grp in zip(s, g)))
-    # 上面的写法不适用 dict.get, 改为逐字符 translate
     out = []
     for di, ui in _STYLES:
         r = []
@@ -95,7 +88,6 @@ print()
 run(v, '裸数 (边界+随机 2000)')
 # 复合: r×万 / r×亿 —— 读数 = read(r) + 单位, 闭包作用在整串上
 RMAX = int(os.environ.get('RMAX', '101'))
-run(sorted(set(random.sample(range(1, 10000), 400))), '万级 (随机 400)') if False else None
 rw = sorted(set([1,2,9,10,11,100,101,110,111,999,1000,1001,1010,1011,1100,9999]
                 + random.sample(range(1, 10000), 400)))
 pairs_w = [(f, r*10**4) for r in rw for f in forms8(read(r) + '万')]

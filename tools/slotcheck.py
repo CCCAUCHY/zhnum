@@ -81,7 +81,7 @@ def main():
     print(f'注册写法 {len(slots):,} 条, 情形 {a.case}', flush=True)
 
     bad_order = bad_equal = bad_value = 0
-    prev_val, prev_max = None, None
+    prev_max = None
     cur_val, cur_keys = None, []
     n_vals = 0
 
@@ -110,7 +110,6 @@ def main():
                     if bad_value <= 5:
                         print(f'  ✗ 值 {cur_val} 的写法键 ≤ 前值最大键')
                 prev_max = max(cur_keys) if cur_keys else prev_max
-                prev_val = cur_val
             cur_val, cur_keys = val, []
         elif val < cur_val:
             bad_order += 1

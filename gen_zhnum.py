@@ -77,16 +77,13 @@ TIER = int(sys.argv[1])
 OUTDIR = sys.argv[2]
 STYLES = 'pure'
 from zhnum_core import (TRUNC_LIMIT, read, u,
-                        D, FIN, FIN_T, TR, TR_T, TRF_, TRFT_,
-                        TRD_, TRDT_, TRU_,
+                        D, FIN, FIN_T, TR, TR_T,
                         alias_closure as _alias_closure)
 
 def alias_closure(s):
     """写法闭包 (只出全小写/全大写两套, 各带简繁 —— 混搭已废弃)"""
     return _alias_closure(s, STYLES)
 
-def in_tier(v):
-    return TIER == 0 or v <= TIER      # 含端点: 亿亿档 = 一亿亿(1e16)以内完美
 
 OUT_ZHNUM = f"{OUTDIR}/zhnum"
 OUT_ZHBASE = f"{OUTDIR}/zhbase"
@@ -198,8 +195,6 @@ for _cp in list(range(0xF900, 0xFB00)) + list(range(0x2F800, 0x2FA20)):
 elems = []              # (元素符号, 定义串)
 elem_seen = set()
 slots = []              # (值, [写法...]); 同值槽发射前归并
-lines = []              # reorder 块内权重行
-seen_tok = {}           # 首列 token 去重 (同元素双行 ⇒ 权重塌缩)
 
 ELEM_TEXT = {}          # 符号名 → 原拼写 (slot-order.tsv 基准)
 
@@ -371,8 +366,7 @@ def _liang_closure(s, guards=True):
 # 排在 二百一十(210) 前; 一千两百三十四万 拆 [一千两百][三十四][万] 值序
 # 全毁. canonical 先, 变体按 (两 个数, 字串).
 if TIER:
-    for _eu, _efu, _ev in (('万', '萬', 10**4), ('亿', '億', 10**8),
-                           ('万亿', '萬億', 10**12)):
+    for _eu, _ev in (('万', 10**4), ('亿', 10**8), ('万亿', 10**12)):
         if _ev > TIER:
             continue
         _rmax = min(9999, TIER // _ev)

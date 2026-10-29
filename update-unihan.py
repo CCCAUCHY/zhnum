@@ -34,8 +34,7 @@ def parse():
     if len(blob) > MAX_ZIP:
         raise SystemExit(f'Unihan.zip 超过 {MAX_ZIP} 字节上限, 中止')
     with zipfile.ZipFile(io.BytesIO(blob)) as z:
-        for member, fields in (('Unihan_IRGSources.txt', ('kTotalStrokes', 'kRSUnicode')),
-                               ('Unihan_DictionaryLikeData.txt', ('kCangjie',))):
+        for member in ('Unihan_IRGSources.txt', 'Unihan_DictionaryLikeData.txt'):
             if z.getinfo(member).file_size > MAX_MEMBER:
                 raise SystemExit(f'{member} 解压后超过 {MAX_MEMBER} 字节上限, 中止')
             with z.open(member) as f:

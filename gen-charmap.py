@@ -24,20 +24,14 @@ def main():
     os.makedirs(outdir, exist_ok=True)
     with gzip.open(SRC, 'rt', encoding='utf-8') as f:
         src = f.read()
-    # 单字行与区间行要分开记: 原始 charmap 对 FA70..FAD9 只给了一条区间行
-    # (<UFA70>...<UFAD9>), 区段内多数码点没有单字行。localedef 解析 <Uxxxx>
-    # 记号时**只认单字行**, 区间行不足以让它拿到权重 ⇒ 那些码点回落 IGNORE。
-    # 旧版把区间行当"已收录"跳过, 于是 FA70..FAD9 里没有单字行的码点全部漏补。
+    # 只看单字行。区间行 (<UFA70>...<UFAD9>) 不影响 localedef 解析 <Uxxxx>
+    # 记号 —— 实测 FA70..FAD9 区段内的码点本来就有单字行。
     have = set()
-    covered = set()
     for ln in src.splitlines():
         if not ln.startswith('<U') or '>' not in ln:
             continue
         tok = ln[2:ln.index('>')]
-        if '..' in tok:
-            a, b = tok.split('..')
-            covered.update(range(int(a, 16), int(b, 16) + 1))
-        else:
+        if '..' not in tok:
             have.add(int(tok, 16))
     add = []
     for lo, hi in BLOCKS:

@@ -21,7 +21,7 @@ zhnum_core.py。理由是把基准从"生成器自己的顺序"换成"按语言�
   python3 tools/sweep.py --tier 亿 --start 0 --count 10100000000 --chunk 1/75
 环境: LOCPATH 指向已编译的 locale 目录, LC_ALL=zhnum.UTF-8。
 """
-import argparse, ctypes, gzip, hashlib, locale, json, os, random, sys, time
+import argparse, ctypes, hashlib, locale, json, os, random, sys, time
 from multiprocessing import Pool
 
 # ─────────────────────────── 独立实现: 整数 → 中文 ───────────────────────────
@@ -117,7 +117,6 @@ CASES = [('裸数字', '', '.txt'), ('第X章', '第', '章.txt'),
 #             随机相邻的两个值之间没有值序关系, 拿它们比较必然误报。
 # 两种模式都按位置切片并行; 每个切片多带一条前驱值 (不计数), 好让切片边界的
 # 值序也被覆盖 —— 否则每个 worker 的第一条都因 prev=None 被跳过。
-import bisect
 
 _VALS = None          # sample 模式的已排序值表 (fork 后由子进程 COW 共享)
 
@@ -163,7 +162,7 @@ def glib_key(s):
 
 
 def _worker(arg):
-    lo, hi, styles = arg
+    lo, hi, _ = arg
     # 显式接收而不是靠 fork 继承: Python 3.14 在 Linux 上已把 multiprocessing
     # 默认启动方式从 fork 改为 spawn/forkserver —— 子进程会重新 import 模块,
     # 主进程改过的模块级变量传不过去, 静默回落成 import 时的值。

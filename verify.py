@@ -26,7 +26,6 @@ locale.setlocale(locale.LC_ALL, '')
 CUR = os.environ.get('LC_ALL', '') or locale.getlocale()[0] or ''
 FULL = 'zhnum' in CUR      # zhnum: 数值槽全检查; zhbase: 只跑默认序检查
 
-import functools
 sk = locale.strxfrm
 
 PATHS = [('strxfrm', sk)]
