@@ -525,12 +525,37 @@ for i, group in enumerate([('上', '前'), ('中',), ('下', '后')]):
 # 值集合仍由上面的各个块决定 (哪些值值得注册是代价权衡), 但每个值的
 # **写法**全部来自 spellings(), 避免"生成器和检查器各实现一套规则"。
 # 单字写法用字符 token, 多字才绑 collating-element (否则与 zhbase 冲突)。
-from zhnum_core import spellings as _spellings
+from zhnum_core import spellings as _spellings, read as _read_imported, _drop_tail_unit as _drop_tail_unit_imported
+
+# ---- 口语骨架 ----
+# 口语形 A百B / A千B / A万B 是规范读法 A百B十 / A千B百 / A万B千 的前缀。
+# 注册口语形为单原子后，它后面 9 个值的规范读法可以靠拆链:
+#   二百五 (单原子) + [十]/[十一]/…/[十九] ⇒ 二百五十..二百五十九
+# 实测零错序 (见 NOTES「口语形与骨架」)。
+# 省下的: 每个骨架 9 个值的规范形 + 骨架自身的规范形 (只留口语形)。
+_SKELETONS = {}
+for _U in (100, 1000, 10000):
+    for _A in range(1, 10):
+        for _B in range(1, 10):
+            _base = _A * _U + _B * (_U // 10)
+            _SKELETONS[_base] = _U // 10      # 骨架能覆盖的步长
+
+# 靠骨架覆盖的值: 不注册
+_covered = set()
+for _base in _SKELETONS:
+    for _k in range(1, 10):
+        _covered.add(_base + _k)      # 骨架覆盖 base+1 .. base+9
+
 merged = {}
 for val, sps in slots:
     if isinstance(val, int):
+        if val in _covered:
+            continue                      # 靠骨架拆链, 不单独注册
+        # 骨架值本身保留全部写法 (规范形 + 口语形) —— 它是拆链的锚点,
+        # 两种形都要在, 否则 二百五十 和 二百五 会不相邻。
+        forms = _spellings(val)
         merged.setdefault(val, []).extend(
-            (x if len(x) == 1 else elem(x)) for x in _spellings(val))
+            (x if len(x) == 1 else elem(x)) for x in forms)
     else:
         merged.setdefault(val, []).extend(sps)
 slots = sorted(merged.items())
