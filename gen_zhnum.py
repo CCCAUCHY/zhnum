@@ -521,9 +521,18 @@ for i, group in enumerate([('上', '前'), ('中',), ('下', '后')]):
 
 # 同值槽归并 (仅分组排序): 同值写法按注册序相邻 (各写法独立槽,
 # strcoll ≠ 0)
+# 写法来源统一为 zhnum_core.spellings() —— 契约的唯一实现。
+# 值集合仍由上面的各个块决定 (哪些值值得注册是代价权衡), 但每个值的
+# **写法**全部来自 spellings(), 避免"生成器和检查器各实现一套规则"。
+# 单字写法用字符 token, 多字才绑 collating-element (否则与 zhbase 冲突)。
+from zhnum_core import spellings as _spellings
 merged = {}
 for val, sps in slots:
-    merged.setdefault(val, []).extend(sps)
+    if isinstance(val, int):
+        merged.setdefault(val, []).extend(
+            (x if len(x) == 1 else elem(x)) for x in _spellings(val))
+    else:
+        merged.setdefault(val, []).extend(sps)
 slots = sorted(merged.items())
 
 # ---- 发射 ----

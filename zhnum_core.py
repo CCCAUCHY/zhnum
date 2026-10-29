@@ -195,15 +195,18 @@ def spellings(n, styles='pure'):
     #       - **零 后面必须还跟着单位**: 一千零一 删零得 一千一, 但 一千一 是
     #         1100 的省写 (一千一百 的省), 不是 1001 ⇒ 不合法。
     #         一万零一百 删零得 一万一百, 一百 有单位 ⇒ 合法。
+    # 省零只覆盖两层结构 (与生成器的省零化合物一致):
+    #   X万B十 / X万B百 / X千B十 / X千B百  (X,B ∈ 一..九)
+    # 三层 (一万一千零一十一 → 一万一千一十一) 不在契约内 —— 生成器没注册,
+    # 实测会产生错序 (11011 排到 11010 之前)。
+    import re as _re
+    _SHENGLING = _re.compile(r'^[一二三四五六七八九](万|千)[一二三四五六七八九](十|百)$')
     for v in list(variants):
         for i, c in enumerate(v):
             if c != '零':
                 continue
-            rest = v[i + 1:]
-            if not rest or not any(u in rest for u in '十百千万亿'):
-                continue
-            t = v[:i] + rest
-            if not t or t[0] == '零' or t[-1] == '零' or '零零' in t:
+            t = v[:i] + v[i + 1:]
+            if not _SHENGLING.match(t):
                 continue
             variants.add(t)
     # ④a2 零十 → 零一十 的省一: 一千零一十 → 一千零十 (1010)
@@ -224,10 +227,6 @@ def spellings(n, styles='pure'):
             pos = [i for i, c in enumerate(v)
                    if c == '二' and i + 1 < len(v) and v[i + 1] in '百千万亿'
                    and not (i > 0 and v[i - 1] in '十零')]
-            if v.endswith('二百') and len(v) > 2:
-                _new.add(v[:-2] + '两')
-            if v.endswith('二千') and len(v) > 2:
-                _new.add(v[:-2] + '两')
             for mask in range(1 << len(pos)):
                 t = list(v)
                 for j, i in enumerate(pos):
@@ -261,10 +260,30 @@ def spellings(n, styles='pure'):
                 c in '万亿' for c in v[1:]):
             # 一 + 多字单位: 一万亿 → 万亿, 一亿亿 → 亿亿
             units.add(v[1:])
-    # × 4 种纯风格
+    # 输出顺序 = 注册序, 同值组内:
+    #   规范形 (纯简 < 纯财 < 繁财) → 省一/省零形 → 口语形 (删尾单位)
+    # 顺序有语义: verify 的同值断言 (十一 < 一十一, 二百五十 < 二百五) 依赖它。
+    # 规范形在前, 变体在后 —— 按"离规范读法多远"排。
+    _tail = _drop_tail_unit(base)
+    def _rank(v):
+        # 0 = 规范读法, 1 = 省一/省零/单位独用, 2 = 删尾单位(口语), 3 = 两
+        if v == base:
+            return 0
+        if _tail and v == _tail:
+            return 2
+        if v in liang or v == '两':
+            # 两 形内部也分规范/口语: 若 v 的"去两"版本等于 base, 是规范形
+            # (两百五十 ← 二百五十), 否则是口语形 (两百五 ← 二百五)
+            v2 = v.replace('两', '二')
+            if v2 == base:
+                return 0.5      # 两 的规范形, 排在 base 之后、变体之前
+            if _tail and v2 == _tail:
+                return 2.5      # 两 的口语形, 排在 base 口语形之后
+            return 3
+        return 1
+    # 两 形也参与统一排序: 规范形 (两百五十) 排在口语形 (两百五) 之前
+    _all = set(variants) | set(units) | set(liang)
     out = []
-    for v in sorted(variants | liang | units):
+    for v in sorted(_all, key=lambda x: (_rank(x), x)):
         out.extend(alias_closure(v, styles))
-    # 两 本身 (值 2) 与 两X 的财务/繁体形不走 alias_closure (两 不在 _DIGS)
-    out.extend(sorted(liang))
     return list(dict.fromkeys(out))
