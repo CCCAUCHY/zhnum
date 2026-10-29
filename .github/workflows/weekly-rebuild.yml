@@ -123,12 +123,6 @@ jobs:
 
       - name: 编译 + 三项验收（全绿才继续）
         if: github.event_name == 'workflow_dispatch' && steps.tierdiff.outputs.changed == '1'
-        env:
-          # 各档的完美范围上界 —— numcheck 只在这个范围内随机取值。
-          # 超出就是文档写明的出档退化, 查它只会报假阳性。
-          LIMIT_亿: '10000000000'
-          LIMIT_万亿: '1000000000000'
-          LIMIT_亿亿: '1000000000000'
         run: |
           set -e
           for t in 亿 万亿 亿亿; do
@@ -148,7 +142,12 @@ jobs:
               || { echo "::error::$t slotcheck 未通过"; exit 1; }
             echo "$t: slotcheck 通过"
             # ③ numcheck: 整数序 vs locale 序 (独立于生成器的写法生成)
-            lim=$(eval echo "\$LIMIT_$t")
+            # 范围按档位: 超出完美范围就是文档写明的出档退化, 查它只会报假阳性。
+            case "$t" in
+              亿)   lim=10000000000 ;;
+              万亿) lim=1000000000000 ;;
+              亿亿) lim=1000000000000 ;;
+            esac
             python3 tools/numcheck.py --loc "$PWD/out/$t/loc" \
               --start 1 --end "$lim" --count 3000 --random --seed 1 \
               | tail -1 | grep -q '无错序' \
