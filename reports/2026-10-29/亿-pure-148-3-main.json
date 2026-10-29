@@ -1,0 +1,23 @@
+{
+ "tier": "亿",
+ "styles": "pure",
+ "run_id": "148-3-main",
+ "start": 1,
+ "swp_sha256": null,
+ "loc_sha256": null,
+ "sample_expr_tpl": "_r = random.Random(<seed>); sorted(set(_r.randrange(<start>, <hi>) for _ in range(<n_drawn>)))",
+ "rounds": [
+  {
+   "n_drawn": 28360,
+   "n_unique": 28360,
+   "n_checked": 28360,
+   "secs": 5.16,
+   "rate": 5494.3,
+   "ok": true,
+   "n_violations": 0,
+   "seed": 1793315329,
+   "hi": 10000000000,
+   "k": 1
+  }
+ ]
+}
