@@ -121,8 +121,14 @@ jobs:
           [ "$rc" -le 1 ] || { echo "::error::tiers_diff.py 异常退出 ($rc)"; exit 1; }
           echo "changed=$rc" >> "$GITHUB_OUTPUT"
 
-      - name: 编译 + verify 三份（全绿才继续）
+      - name: 编译 + 三项验收（全绿才继续）
         if: github.event_name == 'workflow_dispatch' && steps.tierdiff.outputs.changed == '1'
+        env:
+          # 各档的完美范围上界 —— numcheck 只在这个范围内随机取值。
+          # 超出就是文档写明的出档退化, 查它只会报假阳性。
+          LIMIT_亿: '10000000000'
+          LIMIT_万亿: '1000000000000'
+          LIMIT_亿亿: '1000000000000'
         run: |
           set -e
           for t in 亿 万亿 亿亿; do
@@ -130,12 +136,26 @@ jobs:
             (cd "out/$t" \
              && localedef -f "$CHARMAP" -i "$PWD/zhbase" ./loc/zhbase.UTF-8 \
              && localedef -f "$CHARMAP" -i "$PWD/zhnum"  ./loc/zhnum.UTF-8)
+            # ① verify.py: 手写清单回归
             LC_ALL=zhnum.UTF-8 LOCPATH="$PWD/out/$t/loc" \
               python3 verify.py | tail -1 | grep -q '全部通过' \
               || { echo "::error::$t verify 未全绿"; exit 1; }
-            echo "$t: verify 全部通过"
+            echo "$t: verify 通过"
+            # ② slotcheck: 注册表自洽 (注册序 / 同值不等值 / 值序)
+            python3 tools/slotcheck.py --loc "$PWD/out/$t/loc" \
+              --slots "$PWD/out/$t/slot-order.tsv" --case bare | tail -1 \
+              | grep -q '全部通过' \
+              || { echo "::error::$t slotcheck 未通过"; exit 1; }
+            echo "$t: slotcheck 通过"
+            # ③ numcheck: 整数序 vs locale 序 (独立于生成器的写法生成)
+            lim=$(eval echo "\$LIMIT_$t")
+            python3 tools/numcheck.py --loc "$PWD/out/$t/loc" \
+              --start 1 --end "$lim" --count 3000 --random --seed 1 \
+              | tail -1 | grep -q '无错序' \
+              || { echo "::error::$t numcheck 未通过"; exit 1; }
+            echo "$t: numcheck 通过 (范围 1..$lim)"
           done
-          echo "三份 verify 全部通过"
+          echo "三档三项验收全部通过"
 
       - name: 同步产物到 tiers/（手动路径, 三个包 + zhbase）
         if: github.event_name == 'workflow_dispatch'
