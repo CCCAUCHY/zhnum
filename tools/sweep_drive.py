@@ -93,12 +93,16 @@ def run_lane(tier, ver, ctx):
         # (它们各自加自己的行也不行: 同一个文件被两边改写会丢内容)。
         tmp = os.path.join(ROOT, '.sweep-tmp', f'{tier}-{ver}-r{rounds}-{ctx.run_id}.json')
         os.makedirs(os.path.dirname(tmp), exist_ok=True)
-        # numcheck: 整数序 → 全部合法写法 → locale 序, 对比即错序。
-        # 随机取 n 个值 (不重复), 每个值查它的全部写法 (4 种纯风格 × 省一变体)。
+        # numcheck: 整数序 → 全部注册写法 → locale 序, 对比即错序。
+        # --slots 让写法来自 slot-order.tsv (生成器实际注册的, 即契约),
+        # 覆盖口语形/截断形等; 不传则只有 4 形。
+        slots = os.path.join(loc, 'slot-order.tsv')
         cmd = [sys.executable, CHECK, '--loc', loc,
                '--start', '1', '--end', str(LIMIT[tier]), '--count', str(n),
                '--random', '--seed', str(seed),
                '--case', 'bare', '--report', tmp]
+        if os.path.exists(slots):
+            cmd += ['--slots', slots]
         t0 = time.time()
         p = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT,
                            env=dict(os.environ, LC_ALL='zhnum.UTF-8', LOCPATH=loc))
