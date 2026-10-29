@@ -17,14 +17,27 @@ def u(c):
     return f'<U{cp:04X}>' if cp <= 0xFFFF else f'<U{cp:08X}>'
 
 def read(n):
-    """0..99999999 canonical 读法 (枚举用, 与 verify.py read 同节式语义)"""
-    if n >= 10**8:
-        raise ValueError('read 仅支持 <1e8')
+    """任意非负整数的 canonical 读法 (万进)。
+
+    节单位按 10^4 递增: '' / 万 / 亿 / 万亿 / 亿亿 / 万亿亿 … —— 与生成器
+    的 UNIT_CHAIN 一致。旧版只到 万 (上限 1e8), 但生成器注册到 9e39,
+    所以检查器覆盖不到大数。
+    """
+    if n < 0:
+        raise ValueError('read 只接受非负整数')
     if n == 0: return '零'
     s = str(n); units = ['', '十', '百', '千']
     secs = []
     while s: secs.append(s[-4:]); s = s[:-4]
-    sec_units = ['', '万']
+    # 第 k 节的单位 = 10^(4k) 的中文写法
+    _E = ['', '万', '亿']
+    def _unit(k):
+        if k < len(_E):
+            return _E[k]
+        # 10^(4k): k=3 万亿, k=4 亿亿, k=5 万亿亿 …
+        q, r = divmod(k, 2)
+        return ('万' if r else '') + '亿' * q
+    sec_units = [_unit(k) for k in range(len(secs))]
     out = ''
     for si in range(len(secs)-1, -1, -1):
         sec = secs[si]; body = ''
@@ -226,9 +239,11 @@ def spellings(n, styles='pure'):
             break
         liang |= _new
         _work |= _new
-    # ④b 两 本身 = 2 (数量词, 不参与 二 的替换规则)
+    # ④b 两 本身 = 2; 零 的另一种写法 〇
     if n == 2:
         liang.add('两')
+    if n == 0:
+        liang.add('〇')
     # ⑤ 单位独用形: 十/百/千 可单写 (百 = 一百), 万/亿 亦然
     units = set()
     for v in list(variants) + list(liang):
@@ -242,6 +257,10 @@ def spellings(n, styles='pure'):
             units.update(['万', '萬'])
         elif v == '一亿':
             units.update(['亿', '億'])
+        elif v.startswith('一') and len(v) > 1 and v[1:] and all(
+                c in '万亿' for c in v[1:]):
+            # 一 + 多字单位: 一万亿 → 万亿, 一亿亿 → 亿亿
+            units.add(v[1:])
     # × 4 种纯风格
     out = []
     for v in sorted(variants | liang | units):
