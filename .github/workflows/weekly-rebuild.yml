@@ -192,12 +192,25 @@ jobs:
 
       - name: 提交构建产物
         run: |
+          set -e
           git config user.name  "zhnum-bot"
           git config user.email "actions@github.com"
+          # 抽样 workflow 每轮都在往 main 推, 检出后 main 很可能已经前进 ⇒
+          # 直接 push 会被 non-fast-forward 拒绝。这里重试: 每次重新 fetch +
+          # rebase 到最新 main, 产物文件都是刚生成的, rebase 不会冲突
+          # (抽样只动 reports/)。
           git add unihan-*.tsv tiers/
           if git diff --cached --quiet; then
-            echo "产物无实质变化, 跳过提交"
-          else
-            git commit -m "构建: 重建产物 ($(date -u +%F))"
-            git push origin HEAD:main
+            echo "产物无实质变化, 跳过提交"; exit 0
           fi
+          git commit -q -m "构建: 重建产物 ($(date -u +%F))"
+          # 提交只做一次; 重试的是 fetch + rebase + push。
+          for i in 1 2 3 4 5; do
+            git fetch -q origin main
+            git rebase -q origin/main || { git rebase --abort; echo "::error::rebase 失败"; exit 1; }
+            if git push -q origin HEAD:main; then
+              echo "推送成功 (第 $i 次)"; exit 0
+            fi
+            echo "推送冲突, 第 $i 次重试"; sleep $((RANDOM % 8 + 4))
+          done
+          echo "::error::5 次推送都失败"; exit 1
