@@ -21,17 +21,21 @@
 
 用法:
   python3 tools/sweep_drive.py --budget 18000 --round-max 1000000 --workers 4 \\
-      --lanes 亿:mixed --loc-root /tmp/loc --report-dir reports --run-id 123 --commit
+      --lanes 亿:pure --loc-root /tmp/loc --report-dir reports --run-id 123 --commit
 """
 import argparse, json, os, random, subprocess, sys, threading, time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SWEEP = os.path.join(ROOT, 'tools', 'sweep.py')
+CHECK = os.path.join(ROOT, 'tools', 'numcheck.py')
 TIERS = ('亿', '万亿', '亿亿')
-VERS = ('pure', 'mixed')
-# 首轮用的保守先验 (条/秒): 只在小预算时才起作用 (大预算下首轮直接顶到上限)。
-# 实测本机 4 worker: 亿 mixed ~600 / 万亿 ~330 / 亿亿 ~167, 单进程再除以 ~4。
-PRIOR = {'pure': 60.0, 'mixed': 30.0}
+VERS = ('pure',)          # 混搭已废弃
+# 首轮用的保守先验 (值/秒): 只在小预算时才起作用 (大预算下首轮直接顶到上限)。
+# numcheck 每个值要生成全部写法 (4~8 形) 再算键, 比只查一种写法慢;
+# 实测单进程约 30~60 值/秒, 取保守值。
+PRIOR = {'pure': 30.0}
+# 各档的完美范围上界 (README「三档」节的实测值)。numcheck 只在这个范围内
+# 随机取值 —— 超出就是文档写明的出档退化, 查它只会报假阳性。
+LIMIT = {'亿': 10**10, '万亿': 10**12, '亿亿': 10**12}
 PRINT_LOCK = threading.Lock()
 GIT_LOCK = threading.Lock()
 
@@ -89,9 +93,12 @@ def run_lane(tier, ver, ctx):
         # (它们各自加自己的行也不行: 同一个文件被两边改写会丢内容)。
         tmp = os.path.join(ROOT, '.sweep-tmp', f'{tier}-{ver}-r{rounds}-{ctx.run_id}.json')
         os.makedirs(os.path.dirname(tmp), exist_ok=True)
-        cmd = [sys.executable, SWEEP, '--tier', tier, '--styles', ver,
-               '--sample', str(n), '--seed', str(seed), '--workers', str(ctx.workers),
-               '--report', tmp]
+        # numcheck: 整数序 → 全部合法写法 → locale 序, 对比即错序。
+        # 随机取 n 个值 (不重复), 每个值查它的全部写法 (4 种纯风格 × 省一变体)。
+        cmd = [sys.executable, CHECK, '--loc', loc,
+               '--start', '1', '--end', str(LIMIT[tier]), '--count', str(n),
+               '--random', '--seed', str(seed),
+               '--case', 'bare', '--report', tmp]
         t0 = time.time()
         p = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT,
                            env=dict(os.environ, LC_ALL='zhnum.UTF-8', LOCPATH=loc))

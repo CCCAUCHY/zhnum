@@ -23,7 +23,7 @@
 用法: python3 tools/numcheck.py --loc <LOCPATH> --start A --count N [--limit L]
 退出码 0 = 无错序 / 1 = 有错序 / 2 = 环境错。
 """
-import argparse, ctypes, locale, os, sys
+import argparse, ctypes, locale, os, sys, time
 
 _L = ctypes.CDLL('libglib-2.0.so.0')
 _L.g_utf8_collate_key_for_filename.restype = ctypes.c_void_p
@@ -149,9 +149,16 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--loc', required=True)
     ap.add_argument('--start', type=int, default=1)
-    ap.add_argument('--count', type=int, default=100000)
+    ap.add_argument('--count', type=int, default=100000,
+                    help='连续模式的条数; 随机模式是抽取个数')
+    ap.add_argument('--end', type=int, default=0,
+                    help='随机模式的上界 (含); 0 = 用 --start + --count')
+    ap.add_argument('--random', action='store_true',
+                    help='随机取值 (大范围用); 默认连续')
+    ap.add_argument('--seed', type=int, default=0)
     ap.add_argument('--case', default='bare', choices=['bare', 'chapter'])
-    ap.add_argument('--report', default='')
+    ap.add_argument('--report', default='', help='记录写到这个文件 (JSON)')
+    ap.add_argument('--workers', type=int, default=1, help='保留参数, 供 sweep_drive 兼容')
     a = ap.parse_args()
 
     os.environ['LOCPATH'] = a.loc
@@ -166,29 +173,61 @@ def main():
         return 2
 
     pre, suf = ('', '.txt') if a.case == 'bare' else ('第', '章.txt')
-    lo, hi = a.start, a.start + a.count
-    print(f'范围 [{lo:,}, {hi:,}) 情形 {a.case}', flush=True)
+
+    if a.random:
+        import random
+        hi = a.end or (a.start + a.count)
+        rng = random.Random(a.seed)
+        # 去重: 相邻两个值相同时 "本值键 > 前值键" 必然不成立 (有放回抽样
+        # 必然出现重复, 见 NOTES)
+        vals = sorted(set(rng.randrange(a.start, hi + 1) for _ in range(a.count)))
+        print(f'随机 [{a.start:,}, {hi:,}] 抽 {len(vals):,} 个 情形 {a.case}', flush=True)
+    else:
+        hi = a.start + a.count
+        vals = list(range(a.start, hi))
+        print(f'连续 [{a.start:,}, {hi:,}) 共 {len(vals):,} 个 情形 {a.case}', flush=True)
 
     # 1. 整数序 (真值) —— 同时生成全部写法
-    items = []                       # [(值, [写法])]
-    for v in range(lo, hi):
-        items.append((v, spellings(v)))
+    t0 = time.time()
+    items = [(v, spellings(v)) for v in vals]
 
     # 2. locale 序
     bad = 0
+    viol = []
     prev_v, prev_max = None, None
     for v, sps in items:
         ks = [key(pre + s + suf) for s in sps]
         mn, mx = min(ks), max(ks)
         if prev_max is not None and mn <= prev_max:
             bad += 1
-            if bad <= 20:
+            if len(viol) < 20:
+                viol.append({'value': v, 'prev_value': prev_v,
+                             'forms': sps[:4],
+                             'prev_max': prev_max.hex()})
                 print(f'  ✗ 值 {v:,} 的写法键 ≤ 值 {prev_v:,} 的最大键')
                 print(f'     {sps[:2]}')
         prev_v, prev_max = v, mx
+    secs = time.time() - t0
+    n_forms = sum(len(s) for _, s in items)
+
+    if a.report:
+        import hashlib, json
+        os.makedirs(os.path.dirname(a.report) or '.', exist_ok=True)
+        rec = {'ok': not bad, 'n_drawn': len(vals), 'n_unique': len(vals),
+               'n_checked': len(items), 'n_violations': bad,
+               'secs': round(secs, 2),
+               'rate': round(len(items) / max(secs, 1e-9), 1),
+               'seed': a.seed, 'hi': a.end or (a.start + a.count),
+               'mode': 'random' if a.random else 'seq',
+               'n_forms': n_forms,
+               'tool': 'numcheck',
+               'violations': viol,
+               'nc_sha256': hashlib.sha256(open(__file__, 'rb').read()).hexdigest()[:16]}
+        with open(a.report, 'w', encoding='utf-8') as f:
+            json.dump(rec, f, ensure_ascii=False, indent=2)
 
     print(f'{"✓ 无错序" if not bad else f"✗ {bad} 处错序"} '
-          f'({len(items):,} 个值, {sum(len(s) for _, s in items):,} 条写法)')
+          f'({len(items):,} 个值, {n_forms:,} 条写法, {secs:.1f}s)')
     return 0 if not bad else 1
 
 
