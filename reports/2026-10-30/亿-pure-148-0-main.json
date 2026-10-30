@@ -1170,6 +1170,54 @@
    "seed": 1803368163,
    "hi": 10000000000,
    "k": 97
+  },
+  {
+   "n_drawn": 28360,
+   "n_unique": 28360,
+   "n_checked": 28360,
+   "secs": 4.24,
+   "rate": 6691.8,
+   "ok": true,
+   "n_violations": 0,
+   "seed": 1803472892,
+   "hi": 10000000000,
+   "k": 98
+  },
+  {
+   "n_drawn": 28360,
+   "n_unique": 28360,
+   "n_checked": 28360,
+   "secs": 4.21,
+   "rate": 6734.6,
+   "ok": true,
+   "n_violations": 0,
+   "seed": 1803577621,
+   "hi": 10000000000,
+   "k": 99
+  },
+  {
+   "n_drawn": 28360,
+   "n_unique": 28360,
+   "n_checked": 28360,
+   "secs": 4.27,
+   "rate": 6645.9,
+   "ok": true,
+   "n_violations": 0,
+   "seed": 1803682350,
+   "hi": 10000000000,
+   "k": 100
+  },
+  {
+   "n_drawn": 28360,
+   "n_unique": 28360,
+   "n_checked": 28360,
+   "secs": 4.22,
+   "rate": 6720.4,
+   "ok": true,
+   "n_violations": 0,
+   "seed": 1803787079,
+   "hi": 10000000000,
+   "k": 101
   }
  ]
 }
