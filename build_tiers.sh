@@ -6,7 +6,8 @@
 # 不在设计范围内, 不再需要补齐版 charmap。
 set -e
 cd "$(dirname "$0")"
-CHARMAP="$(mktemp)"
+TMPDIR_ABS="$(cd "${TMPDIR:-/tmp}" && pwd)"
+CHARMAP="$TMPDIR_ABS/charmap.$$"
 trap 'rm -f "$CHARMAP"' EXIT
 zcat /usr/share/i18n/charmaps/UTF-8.gz > "$CHARMAP"
 for pair in "100000000 亿" "1000000000000 万亿" "10000000000000000 亿亿"; do
