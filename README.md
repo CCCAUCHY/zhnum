@@ -40,15 +40,15 @@
 
 | 归档 | 完美排序范围 | 排序元素 | Nautilus 500 文件 |
 |------|------------|---------|-----------------|
-| `yi.tar.gz`（亿）| 10¹⁰ | 184,880 | — |
-| `wan-yi.tar.gz`（万亿）| 10¹² | 232,840 | — |
-| `yi-yi.tar.gz`（亿亿）| 10¹² | 280,800 | — |
+| `亿.tar.gz` | 10¹⁰ | 184,880 | — |
+| `万亿.tar.gz` | 10¹² | 232,840 | — |
+| `亿亿.tar.gz` | 10¹² | 280,800 | — |
 
 档名指的是喂给生成器的 `TIER` 参数，不是完美范围本身（见下节 ② 的约束）。
 **亿亿档 27% 的额外元素花在大数写法（亿亿/万亿）上，连续范围并不比万亿档大**；
 需要 10¹⁶ 以内的连续数值序，本设计给不了。
 
-`zhbase` 三份逐字节相同，release 里只提供一份，不重复打包。
+`zhbase` 三份逐字节相同，仓库里只提供一份（`tiers/zhbase`），不重复打包。
 
 ## 性能
 
@@ -95,23 +95,20 @@ LC_ALL=zhnum.UTF-8 LOCPATH=$PWD/out/亿/loc python3 verify.py   # 末行应显�
 
 ## 产物
 
-产物在 **GitHub Releases** 下载（不在 git 里——每次构建都会变，塞进仓库会让
-它膨胀，还要和抽样 workflow 抢推送）。每个 release 含四个文件：
+`tiers/` 下是 glibc locale **源文件**——`localedef` 的输入：
 
 ```
 zhbase                  默认排序源
-yi.tar.gz               数字槽排序，解包得 zhnum（亿）
-wan-yi.tar.gz           └─ <档> ∈ {亿, 万亿, 亿亿}
-yi-yi.tar.gz
+亿.tar.gz               数字槽排序，解包得 zhnum
+万亿.tar.gz             └─ <档> ∈ {亿, 万亿, 亿亿}
+亿亿.tar.gz
 ```
 
-`zhbase` 三份逐字节相同，只提供一份，不重复打包。归档名用 ASCII
-（`yi` / `wan-yi` / `yi-yi`）——GitHub Release 的资产名不支持中文。
+`zhbase` 三份逐字节相同，只提供一份，不重复打包。
 
-`zhbase` 三份逐字节相同，只提供一份，不重复打包。归档名用 ASCII
-（`yi` / `wan-yi` / `yi-yi`）——GitHub Release 的资产名不支持中文。每个归档里只有该档的
+`zhbase` 三份逐字节相同，只提供一份，不重复打包。每个归档里只有该档的
 `zhnum`；`zhnum` 用 `copy "zhbase"`，**编译时两者须位于同一目录**，所以解包后
-把 release 里的 `zhbase` 与解出的 `zhnum` 放到一起。归档用 tar 打包，元数据由
+把 `tiers/zhbase` 与解出的 `zhnum` 放到一起。归档用 tar 打包，元数据由
 `--sort/--mtime/--owner/--group/--numeric-owner` 固定，同一输入重建逐字节相同。
 
 源文件是 UTF-8 文本，编译需带补齐版 charmap（`gen-charmap.py` 生成，见构建段）。
@@ -374,7 +371,7 @@ canon 的顶级单位时才和邻近的值接得上。canon 的顶级单位只�
 2. 生成补齐版 charmap，重建三份 locale 源
 3. 产物静态检查（编码安全、copy 目标白名单、include 指令）
 4. 编译 + `verify.py` 全绿门槛
-5. 打包到 `tiers/`，上传 artifacts，再发布到 GitHub Release
+5. 打包到 `tiers/`，上传 artifacts；产物有变化时由 bot 提交
 
 构建 job 只读（它要下载解压外部数据），提交 job 才持有写权限。
 另有 `.github/workflows/lint-locale.yml`：检查器本身变动时独立跑
@@ -413,5 +410,5 @@ canon 的顶级单位时才和邻近的值接得上。canon 的顶级单位只�
 表示 `https://example.com/x`）。文件头不写生成器、也不描述本文件引用了谁。
 
 汉字排序数据取自 Unihan 数据库（Unicode, Inc.），按 Unicode License v3 使用；
-派生出的 `unihan-*.tsv` 与 release 里的 `zhbase` 因此带该许可，而与 GPL/LGPL 无关的
+派生出的 `unihan-*.tsv` 与 `tiers/zhbase` 因此带该许可，而与 GPL/LGPL 无关的
 第三方材料仅此一项。

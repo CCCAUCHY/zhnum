@@ -29,8 +29,7 @@ def main():
         return 2
     diff, same = [], 0
     for t in TIERS:
-        _ascii = {'亿': 'yi', '万亿': 'wan-yi', '亿亿': 'yi-yi'}[t]
-        src, tar = f'out/{t}/zhnum', f'tiers/{_ascii}.tar.gz'
+        src, tar = f'out/{t}/zhnum', f'tiers/{t}.tar.gz'
         new = open(src, 'rb').read()
         old = member(tar, 'zhnum')
         if old is None:

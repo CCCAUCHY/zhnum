@@ -162,9 +162,8 @@ jobs:
 
   publish:
     needs: build
-    # 数据表 (unihan-*.tsv) 提交到 git; 产物 (tiers/) 上传到 Release ——
-    # 产物是二进制, 每次构建都会变, 塞进 git 会让仓库膨胀, 而且要和抽样
-    # workflow 抢 main 的推送 (抽样每 2 秒推一次)。Release 没有这个问题。
+    # 数据表与产物都提交到 git。抽样 workflow 已经不写 git (结果走 artifact),
+    # main 只有代码/数据表/产物, 不会有高频推送竞争。
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -176,36 +175,22 @@ jobs:
           name: zhnum-build
           path: .
 
-      - name: 提交数据表（只在 Unihan 真更新时）
+      - name: 提交构建产物
         run: |
           set -e
           git config user.name  "zhnum-bot"
           git config user.email "actions@github.com"
-          git add unihan-*.tsv
+          git add unihan-*.tsv tiers/
           if git diff --cached --quiet; then
-            echo "数据表无变化, 跳过提交"; exit 0
+            echo "产物无实质变化, 跳过提交"; exit 0
           fi
-          git commit -q -m "构建: 更新 Unihan 数据表 ($(date -u +%F))"
+          git commit -q -m "构建: 重建产物 ($(date -u +%F))"
           for i in 1 2 3 4 5; do
             git fetch -q origin main
             git rebase -q origin/main || { git rebase --abort; echo "::error::rebase 失败"; exit 1; }
-            if git push -q --force origin HEAD:main; then
-              echo "数据表推送成功 (第 $i 次)"; exit 0
+            if git push -q origin HEAD:main; then
+              echo "推送成功 (第 $i 次)"; exit 0
             fi
             echo "推送冲突, 第 $i 次重试"; sleep $((RANDOM % 4 + 1))
           done
           echo "::error::5 次推送都失败"; exit 1
-
-      - name: 发布产物到 Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -e
-          TAG="build-$(date -u +%Y%m%d-%H%M)"
-          echo "创建 release $TAG"
-          gh release create "$TAG" \
-            --title "构建产物 $(date -u +%F)" \
-            --notes "zhbase + 三档 zhnum（亿 / 万亿 / 亿亿）。\
-          编译方法见 README「产物」节。" \
-            tiers/zhbase tiers/yi.tar.gz tiers/wan-yi.tar.gz tiers/yi-yi.tar.gz
-          echo "已发布: $TAG"

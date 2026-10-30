@@ -3,8 +3,6 @@
 #   tiers/zhbase                 —— 三份共用一份 (内容由 unihan-*.tsv 决定, 三份
 #                                   逐字节相同; 下面会断言, 不同即报错)
 #   tiers/<档>.tar.gz            —— 只装该档的 zhnum
-# 归档名用 ASCII (yi / wan-yi / yi-yi): GitHub Release 的资产名不支持中文,
-# 上传时会被截断 (实测 "万亿.tar.gz" → "tar.gz")。
 # zhbase 不塞进每个包: 那样等于把共用文件复制三遍。zhnum 用 copy "zhbase",
 # 编译时两者须同目录可见 —— 解开包再把 tiers/zhbase 放到一起即可。
 #
@@ -36,14 +34,9 @@ mkdir -p tiers
 cp "$REF" tiers/zhbase
 for t in 亿 万亿 亿亿; do
   d="out/$t"
-  case "$t" in
-    亿)   ascii=yi ;;
-    万亿) ascii=wan-yi ;;
-    亿亿) ascii=yi-yi ;;
-  esac
   tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner \
-      -czf "tiers/$ascii.tar.gz" -C "$d" zhnum
-  printf '  %-8s %s  (%s.tar.gz)\n' "$t" "$(du -h "tiers/$ascii.tar.gz" | cut -f1)" "$ascii"
+      -czf "tiers/$t.tar.gz" -C "$d" zhnum
+  printf '  %-8s %s\n' "$t" "$(du -h "tiers/$t.tar.gz" | cut -f1)"
 done
 echo "  zhbase    $(du -h tiers/zhbase | cut -f1)  (三份共用)"
 echo "  合计 $(du -sh tiers | cut -f1)"
