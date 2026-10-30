@@ -96,10 +96,12 @@ def main():
     def flush_group():
         """一个值结束时: 检查同值组内两两不等值。
 
-        例外: 括号序数 (（上）/(上) 这类) 按设计同槽 —— README 写明
-        "全角/半角、圆/方括号同槽", 它们等值是预期行为, 不算错。"""
+        例外: 括号序数组 (值 0.1/0.2/0.3) 跳过 —— 全角/半角括号
+        （上）/ (上) 经 GLib 归一化后键相同, 这是 GLib 的 NFKC 行为,
+        locale 层无法干预 (strxfrm 路径下两者不等值)。README 已记为
+        已知例外。值 0 (零/〇) 不跳过: 两者键确实不等。"""
         nonlocal bad_equal
-        if cur_val is not None and cur_val < 1:
+        if cur_val is not None and 0 < cur_val < 1:
             return                      # 括号序数的值域 (0.1/0.2/0.3)
         for i in range(len(cur_keys)):
             for j in range(i + 1, len(cur_keys)):
