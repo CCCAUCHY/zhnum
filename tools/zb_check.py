@@ -3,12 +3,13 @@
 
 契约 (按实际行为校准过):
   1. 汉字块内按 Unihan 笔画数 → 部首号 → 仓颉码 → 码点排序; 简繁同块混排。
-  2. 兼容汉字**不独立成块** —— 872 个有行的码点散在整个汉字块里 (实测位置区间
-     6..21863, 区间内夹着 20986 个普通汉字), 所以只能查"都在汉字块内"。
-  3. 未收录码点 (谚文音节、CJK 扩展 A、私用区、兼容区里的未分配码位) 由 glibc
-     回落到一~三级 IGNORE, 互相 tie 并排在所有有序字符**之前**; 系统
-     zh_CN.UTF-8 / en_US.UTF-8 表现相同, 非本 locale 引入。
-  4. 拉丁/阿拉伯保持基表位 (排在汉字之前); 希腊/西里尔/泰文/平假名等已收录脚本
+     **汉字以 Unihan 为准** —— 基表 (iso14651_t1_common) 只提供其他文字,
+     它附带的兼容汉字 (F900-FAFF / 2F800-2FA1F, 共 1014 行) 不参与设计,
+     位置由 glibc 基表回退决定, 不在契约内 (只统计, 不断言)。
+  2. 未收录码点 (谚文音节、CJK 扩展 A、私用区等) 由 glibc 回落到一~三级
+     IGNORE, 互相 tie 并排在所有有序字符**之前**; 系统 zh_CN.UTF-8 /
+     en_US.UTF-8 表现相同, 非本 locale 引入。
+  3. 拉丁/阿拉伯保持基表位 (排在汉字之前); 希腊/西里尔/泰文/平假名等已收录脚本
      排在汉字之后。
 
 退出码: 0 = 契约全部成立 / 1 = 有违反 / 2 = 环境错 (locale 未编译等)。
@@ -75,35 +76,31 @@ for a, b in (diff[:5] + inv[:5]):
     print(f'     ✗ 实测 {chr(a)}{expkey(a)} / 应为 {chr(b)}{expkey(b)}')
 bad += len(inv)
 
-# 2. 兼容汉字在汉字块内 (不独立成块)
+# 2. 基表附带汉字不计入契约: 只统计它们的实际落点, 不做断言。
+#    zhbase 的汉字以 Unihan 为准, 基表只提供其他文字 —— 兼容汉字
+#    (F900-FAFF / 2F800-2FA1F) 在基表里有 1014 行, 它们的位置由 glibc
+#    的基表回退决定, 不属于本 locale 的设计范围。
 rng = list(range(0xF900, 0xFB00)) + list(range(0x2F800, 0x2FA1E))
 IGNORE = k(chr(0xAC00))                       # 谚文音节: 已知的 IGNORE 回落键
 have = [v for v in rng if k(chr(v)) != IGNORE]
 unassigned = [v for v in rng if k(chr(v)) == IGNORE]
-seq = sorted(chars + have, key=lambda v: k(chr(v)))
-pos = {v: i for i, v in enumerate(seq)}
-lo, hi = min(pos[v] for v in have), max(pos[v] for v in have)
-inside = sum(1 for i in range(lo, hi + 1) if seq[i] in strokes)
-print(f'2. 兼容汉字: 有行 {len(have)} 个 (位置 {lo}..{hi}, 区间内夹普通汉字 {inside} 个),'
-      f' 未分配回落 IGNORE {len(unassigned)} 个')
-print(f'   兼容汉字都在汉字块内: {"✓" if have else "✗ 一个都没有"}')
-bad += 0 if have else 1
+print(f'2. 基表附带兼容汉字 (不计入契约): 有键 {len(have)} 个, '
+      f'回落 IGNORE {len(unassigned)} 个 —— 位置由基表决定, 不断言')
 
 # 3. 未收录回落与脚本次序
 probe = [('未收录(谚文)', chr(0xAC00)), ('未收录(扩展A)', chr(0x3400)),
          ('未收录(私用区)', chr(0xE000)), ('拉丁', 'a'), ('汉字首', chr(chars[0])),
-         ('兼容汉字', chr(have[0]) if have else chr(0xF900)),
          ('希腊', 'Ω'), ('西里尔', 'А'), ('泰文', 'ก'), ('平假名', 'あ')]
 order = [n for n, _ in sorted(probe, key=lambda kv: k(kv[1]))]
 print('3. 次序:', ' < '.join(order))
 want = ['未收录(谚文)', '未收录(扩展A)', '未收录(私用区)', '拉丁', '汉字首',
         '希腊', '西里尔', '泰文', '平假名']
-got = [n for n in order if n != '兼容汉字']
+got = order
 if got != want:
     print(f'   ✗ 与预期次序不符, 预期: {" < ".join(want)}')
     bad += 1
 else:
-    print('   ✓ 未收录 < 拉丁 < 汉字 < 其他脚本 (兼容汉字随汉字块, 位置不固定)')
+    print('   ✓ 未收录 < 拉丁 < 汉字 < 其他脚本')
 print(f'4. 拉丁/阿拉伯/汉字: {sorted(["a","A","z","1","9",chr(chars[0]),chr(chars[-1])], key=k)}')
 print('全部契约成立' if not bad else f'契约违反 {bad} 处')
 sys.exit(0 if not bad else 1)

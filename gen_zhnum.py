@@ -5,9 +5,10 @@ zhnum 的 LC_COLLATE 通过 copy "zhbase" 引用默认排序 (换默认排序只
 zhbase, zhnum 自动跟随):
 
   zhbase — 默认排序源. 全部汉字(含数字字)单块: 块内 笔画数 kTotalStrokes
-      → 部首 kRSUnicode → 仓颉 kCangjie → 码点; 汉字行后追加兼容汉字行与
-      脚本行 (基表非空一级元素整体提升, 中文连块). 被 zhnum 引用的契约:
-      ① 单块结构 + 汉字行后兼容汉字/脚本行  ② 数字字按普通汉字进块
+      → 部首 kRSUnicode → 仓颉 kCangjie → 码点; 汉字行后追加脚本行
+      (基表非空一级元素整体提升, 中文连块). 汉字以 Unihan 为准, 基表
+      只提供其他文字, 它附带的兼容汉字不参与设计. 被 zhnum 引用的契约:
+      ① 单块结构 + 汉字行后脚本行  ② 数字字按普通汉字进块
       (zhnum 用数值槽覆盖)  ③ 汉字行二级 <BASE> + 四级 <U0021> (借基表
       符号 — zhnum 位置机制的前提, 见下)  ④ 其余 LC 类别 copy zh_CN.
   zhnum  — copy "zhbase" + 单 reorder 块叠加数值覆盖 (无汉字行):
@@ -132,19 +133,21 @@ all_rows = sorted(hanzi_row(v, s) for v, s in strokes.items())
 # {4,6} 会漏 9292 行) 一级非空且在基表值域 ⇒ 夹在槽键(01 eX)与汉字块
 # (ec…)之间, 切断中文区 (实测 万.txt < あ.txt < 章.txt). 修法 = 块内汉字行
 # **之后**追加同名行: 一级 self、其余 IGNORE — reorder 块内发射序决定一级
-# 值域 ⇒ 汉字 < 兼容汉字 < 其他脚本; 脚本间顺序 = 基表文件序 (iso 组内
-# 意图保留: あ/ア 相邻、全角 Ａ 跟 a). **兼容汉字** (F900-FAFF /
-# 2F800-2FA1F) 紧跟汉字块、先于其他脚本 ⇒ 中文区 = 汉字块 + 兼容汉字
-# 尾巴 (基表未收录的码点由下方区段枚举补齐). ASCII 字母数字排除 (zhnum 里
-# 是槽/拉丁行; zhbase 里保持基表位置 = 拉丁在汉字之下). 与汉字块零重叠 (基表不定义 4E00-9FFF), 无塌缩
-# 风险; '!'(U0021) 等标点一级 IGNORE 不入集 ⇒ 汉字行四级标记 <U0021>
-# 不受影响. 未定义码点 (ext-A/B 汉字等) glibc 回落 = 一~三级 IGNORE +
-# 四级固定值, 互相 tie 按邻居排 (实测 㐀 与 𠀀 键相同).
+# 值域 ⇒ 汉字 < 其他脚本; 脚本间顺序 = 基表文件序 (iso 组内意图保留:
+# あ/ア 相邻、全角 Ａ 跟 a). ASCII 字母数字排除 (zhnum 里是槽/拉丁行;
+# zhbase 里保持基表位置 = 拉丁在汉字之下). 与汉字块零重叠 (基表不定义
+# 4E00-9FFF), 无塌缩风险; '!'(U0021) 等标点一级 IGNORE 不入集 ⇒ 汉字行
+# 四级标记 <U0021> 不受影响. 未定义码点 (ext-A/B 汉字等) glibc 回落 =
+# 一~三级 IGNORE + 四级固定值, 互相 tie 按邻居排 (实测 㐀 与 𠀀 键相同).
+#
+# 基表附带的汉字 (兼容汉字 F900-FAFF / 2F800-2FA1F, 共 1014 行) 一并按
+# 脚本行处理: **zhbase 的汉字以 Unihan 为准**, 基表只提供其他文字, 它附带
+# 的汉字不参与排序设计 (不进汉字块、不补权重、不按区段补齐)。它们的实际
+# 位置由 glibc 的基表回退决定, 不在契约内。
 # 注意: 一级字段正则用 [^;]* — \S 含分号会把整行权重串吞进 group,
 # IGNORE 行漏判 (实测 8265 个透明元素被误提升).
 _w_row = re.compile(r'^<(U[0-9A-F]{4,8})> ([^;]*);')
-compat_rows, script_rows = [], []
-_compat_cp = set()      # 基表已收录的兼容汉字码点
+script_rows = []
 _seen_tok = set()
 _in_tbl = False
 for line in open(ISO_FILE, encoding='utf-8'):
@@ -163,33 +166,7 @@ for line in open(ISO_FILE, encoding='utf-8'):
     if tok in _seen_tok:
         continue
     _seen_tok.add(tok)
-    # 兼容汉字**保留基表的原权重** (<BASE>;<MIN> 之类)。旧版把它们和脚本行
-    # 一样重写成 IGNORE;IGNORE;IGNORE, 于是基表里本来正常的兼容汉字 (如
-    # U+FAD4) 在编译后失去权重、回落成 IGNORE 排到最前 —— 实测 FAD0..FAD7
-    # 全部如此。脚本行仍写 IGNORE (它们靠 reorder 定位, 不需要自身权重)。
-    # 基表行形如 `<Uxxxx> "<键>";<w1>;<w2>;<w3> % 注释`: 按 ';' 切开后
-    # [0]=码点+键, [1..3]=三级权重, [3] 尾部带 ' % 注释'。
-    _w = line.split(';')
-    _weights = ';'.join(x.split(' %')[0].strip() for x in _w[1:4])
-    if 0xF900 <= cp <= 0xFAFF or 0x2F800 <= cp <= 0x2FA1F:
-        compat_rows.append(f'{tok} {tok};{_weights}')
-        _compat_cp.add(cp)
-    else:
-        script_rows.append(f'{tok} {tok};IGNORE;IGNORE;IGNORE')
-
-# 兼容汉字补齐: 基表未收录的码点 (Unicode 后期新增的兼容汉字, 如 U+FA6E/
-# U+FA6F/U+FADA..U+FAFF, 以及 2F800 段的两点) 在基表里既无单字行也无区间
-# 行 ⇒ glibc 回落到"一~三级 IGNORE", 会排到整个排序的最前面 (连拉丁都在其
-# 后), 违反"兼容汉字紧跟汉字块"的契约. 这里按码点补齐, 使其落回兼容汉字尾
-# 巴. 按区段枚举而非查 Unihan 表: 兼容汉字区是 Unicode 固定区段, 后续版本只
-# 会在区内新增码点 ⇒ 对 Unihan/Unicode 更新天然免疫, 无需额外的数据文件.
-# 注意: 其中 40 个码点 (U+FA6E/FA6F/U+FADA..U+FAFF) 不在 glibc 的 UTF-8
-# charmap 里, 需配合 gen-charmap.py 生成的补齐版 charmap 才生效 (否则本行被
-# localedef 静默丢弃, 字符回落排到最前).
-for _cp in list(range(0xF900, 0xFB00)) + list(range(0x2F800, 0x2FA20)):
-    if _cp not in _compat_cp:
-        _t = u(chr(_cp))
-        compat_rows.append(f'{_t} {_t};IGNORE;IGNORE;IGNORE')
+    script_rows.append(f'{tok} {tok};IGNORE;IGNORE;IGNORE')
 
 # ---- 数字区 (仅 zhnum) ----
 elems = []              # (元素符号, 定义串)
@@ -622,18 +599,7 @@ def build(header, copy_src, collate_rows, elems_list):
              '']
     return file
 
-# compat_rows 由两段拼成: 基表已有的兼容汉字 (基表序) + 补齐段 (按区段枚举).
-# 两段的码点范围交错 (补齐段含 0xF900 段, 基表段含 0x2F800 段) ⇒ 直接拼接会
-# 让码点序倒退. glibc 的 order_start 表要求元素按码点递增, 倒退会让 localedef
-# **跳过**后面的行 (实测: <U0002F93F> 后接 <UFAD3> 再接 <U0002F949>, 中间的
-# FAD3/FAD4 全部回落 IGNORE). 所以输出前按码点排序.
-def sort_compat(rows):
-    def cp_of(row):
-        m = re.match(r'<U([0-9A-F]+)>', row)
-        return int(m.group(1), 16) if m else 0
-    return sorted(rows, key=cp_of)
-
-hanzi_rows = [h[4] for h in all_rows] + sort_compat(compat_rows) + script_rows
+hanzi_rows = [h[4] for h in all_rows] + script_rows
 f_zhbase = build(
     # 顺序要紧: escape_char 必须先于 comment_char。实测两行都声明时, 顺序写反
     # 会让 localedef 编出的 LC_COLLATE 膨胀 2.4 倍 (28.7 MB → 68.6 MB); 单独
@@ -644,7 +610,7 @@ f_zhbase = build(
      *DATA_NOTICE,
      '% zhbase — collation source for Chinese: all CJK ideographs in one block,',
      '% ordered by stroke count, radical, cangjie code and code point; the',
-     '% compatibility ideographs and the script ranges follow that block.',
+     '% script ranges follow that block.',
      '',
      '% Ideograph ordering data is derived from the Unihan database',
      '% <https://www.unicode.org/Public/UNIDATA/Unihan.zip>, used under the',
@@ -673,7 +639,7 @@ with open(f'{OUTDIR}/slot-order.tsv', 'w', encoding='utf-8') as f:
     for val, sp in slot_order:
         f.write(f'{val}\t{sp}\n')
 
-print(f'zhbase : 汉字 {len(all_rows)}, 兼容汉字 {len(compat_rows)}, '
+print(f'zhbase : 汉字 {len(all_rows)}, '
       f'脚本 {len(script_rows)}, 共 {len(f_zhbase)} 行')
 print(f'zhnum  : 引用 zhbase; 元素 {len(elems)}, 槽 {len(slots)}, '
       f'数字行 {len(lines)}, 共 {len(f_zhnum)} 行 (不含汉字行)')

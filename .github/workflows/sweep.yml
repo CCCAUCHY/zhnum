@@ -77,12 +77,12 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq locales libglib2.0-0   # sweep 用 ctypes 直调 libglib, 不需要 python3-gi
-      - name: 生成补齐版 charmap
-        run: python3 gen-charmap.py charmaps
       - name: 从源码生成并编译三个版本（整个 job 只编这一次）
         run: |
           set -e
-          CH="$GITHUB_WORKSPACE/charmaps/UTF-8"
+          # localedef 不能读 .gz, 先解压到临时文件
+          CH="$RUNNER_TEMP/UTF-8.charmap"
+          zcat /usr/share/i18n/charmaps/UTF-8.gz > "$CH"
           # 不用 tiers/ 里的预构建产物 —— 那样测的是 main 的产物, 而不是
           # 本分支的。这里从源码生成 (几秒) 再编译 (每档约 1 分钟)。
           pids=""

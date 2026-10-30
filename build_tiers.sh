@@ -2,12 +2,13 @@
 # 构建三份产物: 三档 × 纯写法 (全小写/全大写, 各带简繁)。
 # 混搭写法 (小写数字+大写单位之类) 已整体废弃: 不是实际书写习惯, 实测有跨
 # 风格错序, 编译还更慢 (亿-mixed 比 亿亿-pure 还久)。
-# 注意: localedef 必须用 -f charmaps/UTF-8 (补齐版), 否则兼容汉字区段里
-# glibc 未收录的 40 个码点会被静默丢弃并排到整个排序最前面.
+# charmap 用系统自带的: zhbase 的汉字以 Unihan 为准, 基表附带的兼容汉字
+# 不在设计范围内, 不再需要补齐版 charmap。
 set -e
 cd "$(dirname "$0")"
-CHARMAP="$PWD/charmaps/UTF-8"
-python3 gen-charmap.py charmaps
+CHARMAP="$(mktemp)"
+trap 'rm -f "$CHARMAP"' EXIT
+zcat /usr/share/i18n/charmaps/UTF-8.gz > "$CHARMAP"
 for pair in "100000000 亿" "1000000000000 万亿" "10000000000000000 亿亿"; do
   set -- $pair
   echo "=== $1 → $2 ==="

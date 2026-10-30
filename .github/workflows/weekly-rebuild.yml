@@ -29,8 +29,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    env:
-      CHARMAP: ${{ github.workspace }}/charmaps/UTF-8
     steps:
       # actions 一律钉到 commit SHA: tag 可被重新指向, SHA 不会。
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
@@ -62,11 +60,11 @@ jobs:
           fi
           [ "$rc" -eq 0 ] && echo "Unihan: 有更新" || echo "Unihan: 无变化"
 
-      - name: 生成补齐版 charmap
+      - name: 准备 charmap
         run: |
-          # glibc 的 UTF-8 charmap 漏收 U+FA6E/FA6F/U+FADA..FAFF 等兼容汉字,
-          # 缺了它们 localedef 会静默丢弃对应 locale 行 ⇒ 这些字回落排到最前
-          python3 gen-charmap.py charmaps
+          # localedef 不能读 .gz, 先解压
+          zcat /usr/share/i18n/charmaps/UTF-8.gz > "$RUNNER_TEMP/UTF-8.charmap"
+          echo "CHARMAP=$RUNNER_TEMP/UTF-8.charmap" >> "$GITHUB_ENV"
 
       - name: 重建 locale 源（手动=三份, 定时=只 zhbase）
         run: |

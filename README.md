@@ -15,7 +15,7 @@
 
 | 文件 | 角色 |
 |------|------|
-| `zhbase` | 默认排序源。汉字按 Unihan 笔画数 → 部首 → 仓颉 → 码点排列，简繁同块混排；兼容汉字与各族文字整块在后 |
+| `zhbase` | 默认排序源。汉字按 Unihan 笔画数 → 部首 → 仓颉 → 码点排列，简繁同块混排；各族文字整块在后 |
 | `zhnum` | `copy zhbase`，再叠加数字槽——中文数字串注册为多字符排序元素，按数值比较 |
 
 `zhnum` 以 `zhbase` 为 copy 源，编译时两者须位于同一目录。
@@ -26,7 +26,7 @@
 - **同值写法相邻、不等值**：一 < 壹（固定注册序），`strcoll` 恒非 0。
 - **槽位分区**：序数（第X章、篇X）与量词（X章、X篇）各占独立权重槽，同族聚族、族内纯数值序；序数子族与量词子族不混排。
 - **括号序数**：（上）=（前）<（中）<（下）=（后），值都落在 零 与 一 之间——篇零 < 篇零（上）< 篇零（中）< 篇零（下）< 篇一；全角/半角、圆/方括号同槽。
-- **首字全局序**：拉丁 < 中文数值区 < 汉字（笔画序）< 兼容汉字 < 其他脚本；阿拉伯数字按脚本自然位排（GLib 文件名路径下恒最前）。
+- **首字全局序**：拉丁 < 中文数值区 < 汉字（笔画序）< 其他脚本；阿拉伯数字按脚本自然位排（GLib 文件名路径下恒最前）。
 - **别名**：一个数值的全部中文写法都是它的别名——全小写与全大写两套，各带
   简繁（数字类 × 单位类取同级配对），共 4 形。例如 一百万：
   一百万 / 一百萬 / 壹佰万 / 壹佰萬。类内混写视为错拼，不在册；混搭写法
@@ -71,23 +71,20 @@ CLI 的 `ls`/`sort` 走 glibc strxfrm 路径，每个名字都要全量展开，
 # Unihan 数据（笔画/部首/仓颉三张表；退出码 0=有更新 2=无变化）
 python3 update-unihan.py .
 
-# 补齐版 charmap（glibc 的 UTF-8 charmap 漏收若干兼容汉字码点，缺了它们
-# localedef 会静默丢弃对应 locale 行——成因见 gen-charmap.py 头部注释）
-python3 gen-charmap.py charmaps
-
 # 生成（参数：档位上限 / 输出目录）
 #   档位  10**n，完美排序范围的量级
 #   写法固定为纯写法（全小写/全大写，各带简繁）—— 混搭已废弃，见 How it works
 python3 gen_zhnum.py 100000000 out/亿
 
-# 编译 + 验证（charmap 必须用补齐版）
+# 编译 + 验证（charmap 用系统自带的；localedef 不能读 .gz，先解压）
+zcat /usr/share/i18n/charmaps/UTF-8.gz > /tmp/UTF-8.charmap
 cd out/亿
-localedef -f ../../charmaps/UTF-8 -i $PWD/zhbase ./loc/zhbase.UTF-8
-localedef -f ../../charmaps/UTF-8 -i $PWD/zhnum  ./loc/zhnum.UTF-8
+localedef -f /tmp/UTF-8.charmap -i $PWD/zhbase ./loc/zhbase.UTF-8
+localedef -f /tmp/UTF-8.charmap -i $PWD/zhnum  ./loc/zhnum.UTF-8
 cd ../..
 LC_ALL=zhnum.UTF-8 LOCPATH=$PWD/out/亿/loc python3 verify.py   # 末行应显示「全部通过」
 
-# 或一键三份（三档：生成 charmap → 生成 → 编译）
+# 或一键三份（三档：生成 → 编译）
 ./build_tiers.sh
 ```
 
@@ -104,14 +101,12 @@ zhbase                  默认排序源
 亿亿.tar.gz
 ```
 
-`zhbase` 三份逐字节相同，只提供一份，不重复打包。
-
 `zhbase` 三份逐字节相同，只提供一份，不重复打包。每个归档里只有该档的
 `zhnum`；`zhnum` 用 `copy "zhbase"`，**编译时两者须位于同一目录**，所以解包后
 把 `tiers/zhbase` 与解出的 `zhnum` 放到一起。归档用 tar 打包，元数据由
 `--sort/--mtime/--owner/--group/--numeric-owner` 固定，同一输入重建逐字节相同。
 
-源文件是 UTF-8 文本，编译需带补齐版 charmap（`gen-charmap.py` 生成，见构建段）。
+源文件是 UTF-8 文本，用系统自带的 UTF-8 charmap 编译即可。
 
 **编译耗时随元素量增长，慢不等于文件坏了**：三份从几十秒到两分钟；元素最多的
 `亿亿`（280,800 元素）最久。耗时由元素量决定，与文件是否完整无关。
@@ -346,7 +341,10 @@ canon 的顶级单位时才和邻近的值接得上。canon 的顶级单位只�
   笔画表里的码点（谚文音节、CJK 扩展 A、私用区等）由 glibc 回落到「一~三级
   IGNORE」，互相 tie 并排在所有有序字符之前。系统 `zh_CN.UTF-8` /
   `en_US.UTF-8` 表现相同，非本 locale 引入，不处理。
-  （兼容汉字是例外：它们属于中文区，见构建段的补齐 charmap。）
+- **基表附带的兼容汉字不在契约内**：zhbase 的汉字以 Unihan 为准，基表只
+  提供其他文字。基表里那 1014 行兼容汉字（`F900-FAFF` / `2F800-2FA1F`）不
+  进汉字块、不补权重、不按区段补齐，位置由 glibc 的基表回退决定。它们的排序
+  不承诺任何行为。
 - **兼容汉字分解到扩展区时失效**：`localedef` 会按 Unicode 的
   `kCompatibilityVariant` 把兼容汉字折到它的目标字上找权重。目标字在基本区
   的（`U+2F801` → `丸`）正常；目标在扩展 A 或补充平面的（`U+FAD4` → `U+4039`
@@ -368,7 +366,7 @@ canon 的顶级单位时才和邻近的值接得上。canon 的顶级单位只�
 `.github/workflows/weekly-rebuild.yml`（周一 04:23 UTC）：
 
 1. 拉取最新 Unihan 数据（退出码区分「有更新 / 无变化 / 失败」）
-2. 生成补齐版 charmap，重建三份 locale 源
+2. 重建三份 locale 源
 3. 产物静态检查（编码安全、copy 目标白名单、include 指令）
 4. 编译 + `verify.py` 全绿门槛
 5. 打包到 `tiers/`，上传 artifacts；产物有变化时由 bot 提交

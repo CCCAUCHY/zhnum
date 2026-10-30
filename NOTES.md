@@ -8,7 +8,6 @@ README 讲这个 locale 是什么、怎么用；这里讲**改它的时候要知
 |------|------|
 | `zhnum_core.py` | 纯逻辑：数字读法 `read()` 与别名闭包 `alias_closure()`。不读文件、不写盘、不看 argv |
 | `gen_zhnum.py` | 读数 → 建槽 → 发射 locale 源。`TIER OUTDIR`（只出纯写法） |
-| `gen-charmap.py` | 从系统 charmap 生成补齐版（原因见下） |
 | `update-unihan.py` | 从 Unihan.zip 重建三张 tsv；按内容比对判「有更新」 |
 | `verify.py` | 排序语义验收，也是周构建的通过门槛 |
 | `build_tiers.sh` / `pack_tiers.sh` | 三档产物的一键构建与打包 |
@@ -37,9 +36,11 @@ README 讲这个 locale 是什么、怎么用；这里讲**改它的时候要知
 
 - `localedef -i <名>` 在 cwd 无对应源文件时**静默回落** `/usr/share` 的装机版；
   实验编译必须给绝对路径。
-- 码点不在 glibc 的 UTF-8 charmap 里时，localedef 会**静默丢弃**该行（无告警）。
-  兼容汉字区段有 40 个这样的码点（U+FA6E/FA6F/U+FADA..U+FAFF），靠
-  `gen-charmap.py` 补齐。动过字符相关逻辑后要复查生成行是否真的落地。
+- **基表附带的汉字一律无视**。zhbase 的汉字以 Unihan 为准，基表
+  (`iso14651_t1_common`) 只提供其他文字。它自带 1014 行兼容汉字
+  (`F900-FAFF` / `2F800-2FA1F`)，这些不进汉字块、不补权重、不按区段补齐，
+  位置由 glibc 的基表回退决定。2026-10 之前曾为它们维护「保留基表原权重 +
+  按区段补齐 charmap」一整套逻辑，按新口径全部删除。
 - 别名闭包内部是 set 派生结构，消费前必须 `sorted()`，否则同值槽的注册序会随
   `PYTHONHASHSEED` 抖动，两次构建产出不同文件。
 - `pack_tiers.sh` 会把 `out/` 的产物打包提交。数据表比 `out/` 新时它报错退出，
