@@ -205,11 +205,22 @@ jobs:
           fi
           git commit -q -m "构建: 重建产物 ($(date -u +%F))"
           # 提交只做一次; 重试的是 fetch + rebase + push。
+          # 抽样 workflow 每 2 秒就推一次 main (18 个 job 各提交一轮), 普通
+          # push 基本抢不过。策略: 先试普通 push (快路径), 失败就
+          # --force-with-lease —— 只在远程仍是本次 fetch 到的那个 commit 时
+          # 覆盖, 所以不会盖掉别人在这之间的提交 (抽样报告丢几秒可以接受,
+          # 代码不会丢)。
           for i in 1 2 3 4 5; do
             git fetch -q origin main
             git rebase -q origin/main || { git rebase --abort; echo "::error::rebase 失败"; exit 1; }
             if git push -q origin HEAD:main; then
               echo "推送成功 (第 $i 次)"; exit 0
+            fi
+            # 普通 push 失败: 用 force-with-lease, 基线是刚 fetch 的 origin/main
+            # 不带参数: lease 基线是 git 记的 origin/main (刚 fetch 过),
+            # 若这之间有人推了, lease 检查会失败, 不会覆盖。
+            if git push -q --force-with-lease origin HEAD:main; then
+              echo "强推成功 (第 $i 次)"; exit 0
             fi
             echo "推送冲突, 第 $i 次重试"; sleep $((RANDOM % 8 + 4))
           done
