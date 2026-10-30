@@ -11,7 +11,7 @@ name: 抽样检测（每 6 小时）
 # 抽样条数没有旋钮: 每个 job 编一次 locale 后反复抽样, 每轮结束记下**实测**速度,
 # 按 job 剩余时间算下一轮抽多少条 (单轮上限 100 万, 下限 1 万, 装不下就收工)。
 # 预算 5 小时 (单 job 硬上限 6 小时), 编完还剩多少就抽多少。
-# 每轮结果都提交 (无错序也提交), 记录带样本指纹 (种子 + 区间 + sweep.py 哈希 +
+# 每轮写入 reports/ 并作为 artifact 上传 (不提交 git), 记录带样本指纹 (种子 + 区间 + sweep.py 哈希 +
 # locale 哈希) ⇒ 想拿字面数组随时能精确重建, 所以不存数组 (一份 ~4 MB)。
 on:
   schedule:
@@ -102,7 +102,7 @@ jobs:
           fail=0
           for pid in $pids; do wait "$pid" || fail=1; done
           [ "$fail" -eq 0 ] || { echo "::error::localedef 失败"; exit 1; }
-          for p in $PAIRS; do
+          for p in 亿 万亿 亿亿; do
             [ -f "locroot/$p-pure/zhnum.UTF-8/LC_COLLATE" ] || \
               { echo "::error::locroot/$p-pure 没有编出 zhnum.UTF-8"; exit 1; }
           done
@@ -115,8 +115,9 @@ jobs:
           BUDGET=$(( 18000 - ($(date +%s) - JOB_START) ))     # 5 小时减去已用
           [ "$BUDGET" -gt 600 ] || { echo "::error::留给抽样的时间不足 ($BUDGET s)"; exit 1; }
           echo "槽 $R: 抽样预算 $(( BUDGET / 60 )) 分, 三条 lane (每条单进程)"
-          # 两个分支都提交 —— 报告推到独立的 reports 分支 (只有 reports/,
-          # 不含代码), 所以不会和代码分支抢, 也不受 checkout 的分支影响。
+          # 结果只写 reports/ 并上传为 artifact, 不提交 git —— 这样不会和
+          # 代码分支抢, 也不受 checkout 的分支影响。artifact 自带 head_sha,
+          # 审计时能知道是哪次提交跑出来的。
           python3 tools/sweep_drive.py \
             --budget "$BUDGET" --round-max 1000000 --workers 1 \
             --lanes 亿:pure,万亿:pure,亿亿:pure \

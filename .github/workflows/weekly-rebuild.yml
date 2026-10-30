@@ -5,7 +5,7 @@ name: 周构建（zhbase）／手动发布 zhnum
 #   定时（每周一）—— **只做 zhbase**。Unihan 更新只影响 zhbase (实测: 改一笔
 #     笔画数, zhbase 变、zhnum 一字不变), 三个包 (tiers/<档>.tar.gz)
 #     里装的只有 zhnum, 所以它们逐字节不变、不用重编。这里只生成一份 zhbase、
-#     编一次、跑默认序检查、覆盖 tiers/zhbase, 提交。约 1 分钟。
+#     编一次、跑 zb_check, 提交 unihan-*.tsv。**不打包、不动 tiers/**。约 1 分钟。
 #
 #   手动 dispatch —— **三个包全建**。zhnum 的发布只走这条路径: 全量重建、三份
 #     各编一次各 verify 一次、打包、连同 zhbase 一起提交。

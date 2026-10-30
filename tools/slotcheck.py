@@ -9,12 +9,16 @@
 
 检查内容:
   1. 注册序 == 值序: 按注册序扫一遍, 值必须单调不减
-  2. 同值组: 两两 strcoll ≠ 0 (各占一槽的副产品, 不是契约条款)
+  2. 同值组: 两两 GLib 键 ≠ (各占一槽的副产品, 不是契约条款)
   3. 值序: 每个值取全部写法的键, 必须严格大于前一值的全部键
 
 注意第 3 条比契约强: 它要求跨类的全局单调, 而契约只保证同类内序。
-检查器把它当参考指标 —— 报出来的跨类错序 (如 十万二 vs 壹拾萬壹仟玖佰
-玖拾玖) 属于契约的 N1「不同类之间的顺序不保证」, 不是缺陷。
+检查器把它当参考指标 —— 报出来的跨类错序属于「不同类之间的顺序不保证」,
+不是缺陷。但本检查器只遍历 slot-order.tsv 里注册过的写法, 所以这类跨类
+问题通常不会在这里现身 (它们是 numcheck 不带 --slots 时的假阳性来源)。
+
+第 2 条对值 0 (零/〇) 和括号序数组 (0.1..0.3) 跳过: 这些组的写法本来就
+允许相等或另有分组语义。
 
 用法: python3 tools/slotcheck.py --loc <LOCPATH> --slots <slot-order.tsv>
       [--case bare|chapter]  [--max N]
@@ -107,6 +111,8 @@ def main():
         k = key(pre + sp + suf)
         if val != cur_val:
             if cur_val is not None:
+                if val < cur_val:          # 注册序倒退 (值变小)
+                    bad_order += 1
                 flush_group()
                 n_vals += 1
                 if prev_max is not None and cur_keys and min(cur_keys) <= prev_max:
@@ -115,8 +121,6 @@ def main():
                         print(f'  ✗ 值 {cur_val} 的写法键 ≤ 前值最大键')
                 prev_max = max(cur_keys) if cur_keys else prev_max
             cur_val, cur_keys = val, []
-        elif val < cur_val:
-            bad_order += 1
         cur_keys.append(k)
     if cur_val is not None:
         flush_group()

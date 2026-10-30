@@ -88,13 +88,9 @@ _UMAP = [str.maketrans('', ''),                          # 小写简
 # 风格组合 (数字类风格下标, 单位类风格下标)。
 # 纯形 = 数字类与单位类同级配对: 全小写 (小写+小写) 与 全大写 (大写+大写),
 #   各带简繁 —— 四种风格里不含混搭的两套。
-# 含混搭 = 再加上「小写数字+大写单位」与「大写数字+小写单位」两套。
-# 组内序 = 注册序 (同值写法按此相邻): 纯简 < 纯财 < A 数字财+单位简 < B 数字简+
-# 单位财 < 繁财; 其余组合排在其后。
+# 混搭 (小写数字+大写单位 / 大写数字+小写单位) 已整体废弃: 不是实际书写
+#   习惯, 语料里几乎不出现, 且实测有跨风格错序、编译还更慢。
 _STYLE_PURE = ((0, 0), (1, 1), (0, 2), (2, 3))
-_STYLE_MIXED = ((0, 0), (1, 1), (1, 0), (1, 2), (1, 3),
-                (0, 1), (0, 2), (0, 3), (2, 1), (2, 3), (2, 0), (2, 2))
-# (风格组合的选择在 alias_closure 里按 styles 参数进行)
 
 def _cls(s):
     """逐字符分类: 'd' 数字类 / 'u' 单位类"""
@@ -109,10 +105,14 @@ def _cls(s):
             prev_d = c in _DIGS
     return g
 
-def alias_closure(s, styles='mixed'):
+def alias_closure(s, styles='pure'):
     """读数 s 的全部合法写法 (数字类 3 形 × 单位类 4 形, 类内统一)。
-    styles: 'mixed' 四种风格全展开; 'pure' 只全小写/全大写两套。"""
-    _order = _STYLE_MIXED if styles == 'mixed' else _STYLE_PURE
+
+    styles 只接受 'pure' (全小写/全大写两套, 各带简繁)。混搭已废弃,
+    参数保留是为了让调用点显式写明口径。"""
+    if styles != 'pure':
+        raise ValueError(f'styles 只支持 pure (混搭已废弃), 收到 {styles!r}')
+    _order = _STYLE_PURE
     g = _cls(s)
     return list(dict.fromkeys(
         ''.join(c.translate(_DMAP[d] if grp == 'd' else _UMAP[u_])

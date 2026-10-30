@@ -5,7 +5,7 @@
   1. 汉字块内按 Unihan 笔画数 → 部首号 → 仓颉码 → 码点排序; 简繁同块混排。
      **汉字以 Unihan 为准** —— 基表 (iso14651_t1_common) 只提供其他文字,
      它附带的兼容汉字 (F900-FAFF / 2F800-2FA1F, 共 1014 行) 不参与设计,
-     位置由 glibc 基表回退决定, 不在契约内 (只统计, 不断言)。
+     与其他脚本行同样按 reorder 发射序定位, 排序不在契约内 (只统计, 不断言)。
   2. 未收录码点 (谚文音节、CJK 扩展 A、私用区等) 由 glibc 回落到一~三级
      IGNORE, 互相 tie 并排在所有有序字符**之前**; 系统 zh_CN.UTF-8 /
      en_US.UTF-8 表现相同, 非本 locale 引入。
@@ -78,8 +78,8 @@ bad += len(inv)
 
 # 2. 基表附带汉字不计入契约: 只统计它们的实际落点, 不做断言。
 #    zhbase 的汉字以 Unihan 为准, 基表只提供其他文字 —— 兼容汉字
-#    (F900-FAFF / 2F800-2FA1F) 在基表里有 1014 行, 它们的位置由 glibc
-#    的基表回退决定, 不属于本 locale 的设计范围。
+#    (F900-FAFF / 2F800-2FA1F) 在基表里有 1014 行, 它们与其他脚本行同样
+#    按 reorder 发射序定位, 不属于本 locale 的设计范围。
 rng = list(range(0xF900, 0xFB00)) + list(range(0x2F800, 0x2FA1E))
 IGNORE = k(chr(0xAC00))                       # 谚文音节: 已知的 IGNORE 回落键
 have = [v for v in rng if k(chr(v)) != IGNORE]
