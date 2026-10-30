@@ -46,28 +46,16 @@ def log(msg):
 
 
 def commit_round(files, msg, tries=5):
-    """提交这一轮的结果。--mixed 而不是 --soft: 索引要回到 origin/main,
-    否则提交出来的树 = 本进程检出时的旧树 + 新文件, 会抹掉别的 run 刚提交的
-    东西 (工作区里新写的报告是未跟踪的, --mixed 不影响)。"""
-    with GIT_LOCK:
-        for i in range(tries):
-            subprocess.run(['git', 'fetch', '-q', 'origin', 'main'], cwd=ROOT)
-            subprocess.run(['git', 'reset', '-q', '--mixed', 'origin/main'], cwd=ROOT)
-            subprocess.run(['git', 'add', '-f'] + files, cwd=ROOT)
-            c = subprocess.run(['git', '-c', 'user.name=zhnum-bot',
-                                '-c', 'user.email=actions@github.com',
-                                'commit', '-q', '-m', msg], cwd=ROOT)
-            if c.returncode != 0:
-                log('提交: 无新内容, 跳过')
-                return False
-            if subprocess.run(['git', 'push', '-q', 'origin', 'HEAD:main'],
-                              cwd=ROOT).returncode == 0:
-                log(f'提交: {msg}')
-                return True
-            log(f'推送冲突, 第 {i + 1} 次重试')
-            time.sleep(random.randint(5, 15))
-        log('提交: 5 次都失败, 这一轮留在工作区')
-        return False
+    """不提交 git —— 结果由 CI 上传为 artifact。
+
+    报告不进 git 的理由:
+      · 抽样每轮都产出, 塞进 git 会让仓库膨胀
+      · 推 main 会和代码分支抢 (实测 --force 也失败, cannot lock ref)
+      · artifact 自带 head_sha, 审计时能精确知道是哪个提交跑出来的
+    本地跑 (不带 --commit) 时结果直接留在 reports/ 目录。
+    """
+    log(f'产出: {msg}')
+    return True
 
 
 def run_lane(tier, ver, ctx):

@@ -61,7 +61,7 @@ jobs:
     # 编译 + 抽样都在里面。
     runs-on: ubuntu-24.04
     permissions:
-      contents: write                 # 每一轮结果都提交 (无错序也提交)
+      contents: read                  # 结果上传为 artifact, 不写 git
     strategy:
       fail-fast: false
       matrix:
@@ -115,15 +115,22 @@ jobs:
           BUDGET=$(( 18000 - ($(date +%s) - JOB_START) ))     # 5 小时减去已用
           [ "$BUDGET" -gt 600 ] || { echo "::error::留给抽样的时间不足 ($BUDGET s)"; exit 1; }
           echo "槽 $R: 抽样预算 $(( BUDGET / 60 )) 分, 三条 lane (每条单进程)"
-          # 只有 main 分支的 job 提交报告 —— 骨架分支的 job 检出的是
-          # feat/oral-skeleton, commit_round 里的 reset --mixed origin/main
-          # 会把它的代码重置掉。骨架分支的结果留在 job 日志里。
-          COMMIT=""
-          [ "${{ matrix.branch }}" = "main" ] && COMMIT="--commit"
+          # 两个分支都提交 —— 报告推到独立的 reports 分支 (只有 reports/,
+          # 不含代码), 所以不会和代码分支抢, 也不受 checkout 的分支影响。
           python3 tools/sweep_drive.py \
             --budget "$BUDGET" --round-max 1000000 --workers 1 \
             --lanes 亿:pure,万亿:pure,亿亿:pure \
             --loc-root "$PWD/locroot" \
             --report-dir reports \
-            --run-id "$GITHUB_RUN_NUMBER-$R-$(echo '${{ matrix.branch }}' | tr '/' '-')" \
-            $COMMIT
+            --run-id "$GITHUB_RUN_NUMBER-$R-$(echo '${{ matrix.branch }}' | tr '/' '-')"
+
+      - name: 上传抽样结果
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          # artifact 名带 slot 和分支, 保证唯一; GitHub 会附带 head_sha,
+          # 审计时能精确知道是哪个提交跑出来的
+          name: sweep-${{ github.run_number }}-${{ matrix.slot }}-${{ strategy.job-index }}
+          path: reports/
+          retention-days: 90
+          if-no-files-found: warn
