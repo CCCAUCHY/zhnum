@@ -207,5 +207,5 @@ jobs:
             --title "构建产物 $(date -u +%F)" \
             --notes "zhbase + 三档 zhnum（亿 / 万亿 / 亿亿）。\
           编译方法见 README「产物」节。" \
-            tiers/zhbase tiers/亿.tar.gz tiers/万亿.tar.gz tiers/亿亿.tar.gz
+            tiers/zhbase tiers/yi.tar.gz tiers/wan-yi.tar.gz tiers/yi-yi.tar.gz
           echo "已发布: $TAG"

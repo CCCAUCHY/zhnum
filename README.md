@@ -40,9 +40,9 @@
 
 | 归档 | 完美排序范围 | 排序元素 | Nautilus 500 文件 |
 |------|------------|---------|-----------------|
-| `亿.tar.gz` | 10¹⁰ | 184,880 | — |
-| `万亿.tar.gz` | 10¹² | 232,840 | — |
-| `亿亿.tar.gz` | 10¹² | 280,800 | — |
+| `yi.tar.gz`（亿）| 10¹⁰ | 184,880 | — |
+| `wan-yi.tar.gz`（万亿）| 10¹² | 232,840 | — |
+| `yi-yi.tar.gz`（亿亿）| 10¹² | 280,800 | — |
 
 档名指的是喂给生成器的 `TIER` 参数，不是完美范围本身（见下节 ② 的约束）。
 **亿亿档 27% 的额外元素花在大数写法（亿亿/万亿）上，连续范围并不比万亿档大**；
@@ -100,14 +100,16 @@ LC_ALL=zhnum.UTF-8 LOCPATH=$PWD/out/亿/loc python3 verify.py   # 末行应显�
 
 ```
 zhbase                  默认排序源
-亿.tar.gz               数字槽排序，解包得 zhnum
-万亿.tar.gz             └─ <档> ∈ {亿, 万亿, 亿亿}
-亿亿.tar.gz
+yi.tar.gz               数字槽排序，解包得 zhnum（亿）
+wan-yi.tar.gz           └─ <档> ∈ {亿, 万亿, 亿亿}
+yi-yi.tar.gz
 ```
 
-`zhbase` 三份逐字节相同，只提供一份，不重复打包。
+`zhbase` 三份逐字节相同，只提供一份，不重复打包。归档名用 ASCII
+（`yi` / `wan-yi` / `yi-yi`）——GitHub Release 的资产名不支持中文。
 
-`zhbase` 三份逐字节相同，只提供一份，不重复打包。每个归档里只有该档的
+`zhbase` 三份逐字节相同，只提供一份，不重复打包。归档名用 ASCII
+（`yi` / `wan-yi` / `yi-yi`）——GitHub Release 的资产名不支持中文。每个归档里只有该档的
 `zhnum`；`zhnum` 用 `copy "zhbase"`，**编译时两者须位于同一目录**，所以解包后
 把 release 里的 `zhbase` 与解出的 `zhnum` 放到一起。归档用 tar 打包，元数据由
 `--sort/--mtime/--owner/--group/--numeric-owner` 固定，同一输入重建逐字节相同。
