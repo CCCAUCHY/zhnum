@@ -103,26 +103,11 @@ jobs:
           set -e
           echo "$OUT"
           [ "$rc" -eq 0 ] || { echo "::error::zhbase 默认序检查未通过 (退出码 $rc)"; exit 1; }
-          cp "$D/zhbase" tiers/zhbase
-          echo "tiers/zhbase 已更新（三个包不含 zhbase, 不用动）"
+          echo "zhbase 默认序检查通过（产物发布走手动 dispatch）"
 
       # ───────────── 手动路径: 三个包全建 ─────────────
-      - name: 产物有没有真变（手动路径）
-        id: tierdiff
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          # 这一步几秒, 后面那步 18 分钟。直接比刚生成的源和仓库里的产物 ——
-          # 那才是"这次提交会不会变"。实测过一整周: 全部 sha256 相同,
-          # 编译出来什么都没变。
-          set +e
-          python3 tools/tiers_diff.py
-          rc=$?
-          set -e
-          [ "$rc" -le 1 ] || { echo "::error::tiers_diff.py 异常退出 ($rc)"; exit 1; }
-          echo "changed=$rc" >> "$GITHUB_OUTPUT"
-
       - name: 编译 + 三项验收（全绿才继续）
-        if: github.event_name == 'workflow_dispatch' && steps.tierdiff.outputs.changed == '1'
+        if: github.event_name == 'workflow_dispatch'
         run: |
           set -e
           for t in 亿 万亿 亿亿; do
@@ -175,13 +160,14 @@ jobs:
             unihan-*.tsv
           retention-days: 90
 
-  commit:
+  publish:
     needs: build
-    # 不设条件: 变了就提交, 没变内部自动跳过 —— 定时路径改的是 zhbase,
-    # 手动路径还可能带上三个包, 两边都靠 git 自己判断有没有东西可提。
+    # 数据表 (unihan-*.tsv) 提交到 git; 产物 (tiers/) 上传到 Release ——
+    # 产物是二进制, 每次构建都会变, 塞进 git 会让仓库膨胀, 而且要和抽样
+    # workflow 抢 main 的推送 (抽样每 2 秒推一次)。Release 没有这个问题。
     runs-on: ubuntu-latest
     permissions:
-      contents: write           # 只有这个 job 需要写
+      contents: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
 
@@ -190,38 +176,36 @@ jobs:
           name: zhnum-build
           path: .
 
-      - name: 提交构建产物
+      - name: 提交数据表（只在 Unihan 真更新时）
         run: |
           set -e
           git config user.name  "zhnum-bot"
           git config user.email "actions@github.com"
-          # 抽样 workflow 每轮都在往 main 推, 检出后 main 很可能已经前进 ⇒
-          # 直接 push 会被 non-fast-forward 拒绝。这里重试: 每次重新 fetch +
-          # rebase 到最新 main, 产物文件都是刚生成的, rebase 不会冲突
-          # (抽样只动 reports/)。
-          git add unihan-*.tsv tiers/
+          git add unihan-*.tsv
           if git diff --cached --quiet; then
-            echo "产物无实质变化, 跳过提交"; exit 0
+            echo "数据表无变化, 跳过提交"; exit 0
           fi
-          git commit -q -m "构建: 重建产物 ($(date -u +%F))"
-          # 提交只做一次; 重试的是 fetch + rebase + push。
-          # 抽样 workflow 每 2 秒就推一次 main (18 个 job 各提交一轮), 普通
-          # push 基本抢不过。策略: 先试普通 push (快路径), 失败就
-          # --force-with-lease —— 只在远程仍是本次 fetch 到的那个 commit 时
-          # 覆盖, 所以不会盖掉别人在这之间的提交 (抽样报告丢几秒可以接受,
-          # 代码不会丢)。
+          git commit -q -m "构建: 更新 Unihan 数据表 ($(date -u +%F))"
           for i in 1 2 3 4 5; do
             git fetch -q origin main
             git rebase -q origin/main || { git rebase --abort; echo "::error::rebase 失败"; exit 1; }
-            if git push -q origin HEAD:main; then
-              echo "推送成功 (第 $i 次)"; exit 0
+            if git push -q --force origin HEAD:main; then
+              echo "数据表推送成功 (第 $i 次)"; exit 0
             fi
-            # 普通 push 失败: 用 force-with-lease, 基线是刚 fetch 的 origin/main
-            # 不带参数: lease 基线是 git 记的 origin/main (刚 fetch 过),
-            # 若这之间有人推了, lease 检查会失败, 不会覆盖。
-            if git push -q --force-with-lease origin HEAD:main; then
-              echo "强推成功 (第 $i 次)"; exit 0
-            fi
-            echo "推送冲突, 第 $i 次重试"; sleep $((RANDOM % 8 + 4))
+            echo "推送冲突, 第 $i 次重试"; sleep $((RANDOM % 4 + 1))
           done
           echo "::error::5 次推送都失败"; exit 1
+
+      - name: 发布产物到 Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          TAG="build-$(date -u +%Y%m%d-%H%M)"
+          echo "创建 release $TAG"
+          gh release create "$TAG" \
+            --title "构建产物 $(date -u +%F)" \
+            --notes "zhbase + 三档 zhnum（亿 / 万亿 / 亿亿）。\
+          编译方法见 README「产物」节。" \
+            tiers/zhbase tiers/亿.tar.gz tiers/万亿.tar.gz tiers/亿亿.tar.gz
+          echo "已发布: $TAG"

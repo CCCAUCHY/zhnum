@@ -15,3 +15,6 @@ security_check/
 
 # 抽样驱动的临时记录 (每轮一份, 读完即删; 汇总文件才进 reports/)
 .sweep-tmp/
+
+# 产物改由 GitHub Release 发布（见 .github/workflows/weekly-rebuild.yml）
+tiers/
