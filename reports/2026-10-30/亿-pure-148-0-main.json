@@ -2742,6 +2742,42 @@
    "seed": 1817087662,
    "hi": 10000000000,
    "k": 228
+  },
+  {
+   "n_drawn": 28360,
+   "n_unique": 28360,
+   "n_checked": 28360,
+   "secs": 4.27,
+   "rate": 6645.5,
+   "ok": true,
+   "n_violations": 0,
+   "seed": 1817192391,
+   "hi": 10000000000,
+   "k": 229
+  },
+  {
+   "n_drawn": 28360,
+   "n_unique": 28360,
+   "n_checked": 28360,
+   "secs": 4.25,
+   "rate": 6670.5,
+   "ok": true,
+   "n_violations": 0,
+   "seed": 1817297120,
+   "hi": 10000000000,
+   "k": 230
+  },
+  {
+   "n_drawn": 28360,
+   "n_unique": 28360,
+   "n_checked": 28360,
+   "secs": 4.23,
+   "rate": 6702.0,
+   "ok": true,
+   "n_violations": 0,
+   "seed": 1817401849,
+   "hi": 10000000000,
+   "k": 231
   }
  ]
 }
