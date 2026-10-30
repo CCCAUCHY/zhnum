@@ -18,3 +18,6 @@ security_check/
 
 # 产物改由 GitHub Release 发布（见 .github/workflows/weekly-rebuild.yml）
 tiers/
+
+# 抽样结果改为 artifact, 不进 git
+reports/
